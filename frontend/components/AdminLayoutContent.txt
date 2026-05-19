@@ -1,0 +1,12 @@
+"use client";
+
+import AdminLayout from "@/components/admin/AdminLayout";
+import type { AdminLayoutContentProps } from "@/types/admin";
+
+export default function AdminLayoutContent({ children, activeTab = "dashboard" }: AdminLayoutContentProps) {
+  return (
+    <AdminLayout activeTab={activeTab}>
+      {children}
+    </AdminLayout>
+  );
+}

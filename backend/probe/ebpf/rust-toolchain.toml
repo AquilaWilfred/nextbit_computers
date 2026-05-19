@@ -1,0 +1,11 @@
+# eBPF compilation requires nightly for build-std=core on bpfel-unknown-none
+# The probe-app (userspace) can use stable, but the workspace needs nightly
+# for cargo build -Z build-std to work when compiling probe-ebpf.
+[toolchain]
+channel = "nightly"
+targets = [
+    "bpfel-unknown-none",   # eBPF little-endian (x86, ARM)
+    "bpfeb-unknown-none",   # eBPF big-endian (rare)
+    "x86_64-unknown-linux-gnu",
+]
+components = ["rust-src", "rustfmt", "clippy"]

@@ -1,0 +1,12 @@
+pub mod alerts;
+pub mod assets;
+pub mod auth;
+pub mod debug;
+pub mod device;
+pub mod health;
+pub mod probe;
+pub mod proxy;
+pub mod scan;
+pub mod version;
+pub mod ws;
+pub mod ws_technician;

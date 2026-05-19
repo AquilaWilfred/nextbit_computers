@@ -1,0 +1,208 @@
+services:
+  # ─────────────────────────────────────────
+  # Nginx Reverse Proxy
+  # ─────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gateway
+      - frontend
+    networks:
+      - nextbit
+    restart: always
+
+  # ─────────────────────────────────────────
+  # Rust/Axum Gateway
+  # ─────────────────────────────────────────
+  gateway:
+    build:
+      context: ./backend/gateway
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend/gateway:/app
+      - gateway-cargo-cache:/usr/local/cargo/registry
+      - gateway-target-cache:/app/target
+    expose:
+      - "8080"
+    environment:
+      - DATABASE_URL=postgres://nextbit:nextbit@postgres:5432/nextbit
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://nextbit:nextbit@mongodb:27017/nextbit
+      - RUST_LOG=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - nextbit
+
+  # ─────────────────────────────────────────
+  # Python Catalogue Service
+  # ─────────────────────────────────────────
+  catalogue:
+    build:
+      context: ./backend/catalogue
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend/catalogue:/app
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgres://nextbit:nextbit@postgres:5432/nextbit
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://nextbit:nextbit@mongodb:27017/nextbit
+      - GATEWAY_URL=http://gateway:8080
+    env_file:
+      - ./backend/catalogue/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - nextbit
+
+  # ─────────────────────────────────────────
+  # Next.js Frontend
+  # ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+      - frontend-next-cache:/app/.next
+    expose:
+      - "3000"
+    environment:
+      - NEXT_PUBLIC_GATEWAY_URL=http://localhost:8080
+      - NEXT_PUBLIC_CATALOGUE_URL=http://localhost:8001
+      - WATCHPACK_POLLING=true
+    depends_on:
+      - gateway
+      - catalogue
+    networks:
+      - nextbit
+
+  # ─────────────────────────────────────────
+  # PostgreSQL
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nextbit
+      POSTGRES_USER: nextbit
+      POSTGRES_PASSWORD: nextbit
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextbit"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nextbit
+    restart: always
+
+  # ─────────────────────────────────────────
+  # Redis
+  # ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - nextbit
+    restart: always
+
+  # ─────────────────────────────────────────
+  # MongoDB
+  # ─────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: nextbit
+      MONGO_INITDB_ROOT_PASSWORD: nextbit
+      MONGO_INITDB_DATABASE: nextbit
+    volumes:
+      - mongo-data:/data/db
+      - ./infra/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nextbit
+    restart: always
+
+
+  # ─────────────────────────────────────────
+  # ML Service
+  # ─────────────────────────────────────────
+  ml-service:
+    build:
+      context: ./backend/ml-service
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend/ml-service:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://nextbit:nextbit@postgres:5432/nextbit
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://nextbit:nextbit@mongodb:27017/nextbit
+      - CATALOGUE_URL=http://catalogue:8001
+    env_file:
+      - ./backend/ml-service/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - nextbit
+
+# ─────────────────────────────────────────
+# Named Volumes
+# ─────────────────────────────────────────
+volumes:
+  postgres-data:
+  redis-data:
+  mongo-data:
+  gateway-cargo-cache:
+  gateway-target-cache:
+  frontend-node-modules:
+  frontend-next-cache:
+
+# ─────────────────────────────────────────
+# Network
+# ─────────────────────────────────────────
+networks:
+  nextbit:
+    driver: bridge

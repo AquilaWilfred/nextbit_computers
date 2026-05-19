@@ -1,0 +1,172 @@
+mod auth;
+mod handlers;
+mod middleware;
+mod models;
+mod redis_helpers;
+mod services;
+mod state;
+mod routes;
+
+use anyhow::Result;
+use axum::routing::{any, delete, get, patch, post};
+use axum::Router;
+use mongodb::Client as MongoClient;
+use redis::Client as RedisClient;
+use sqlx::PgPool;
+use std::sync::Arc;
+use tracing::info;
+use hyper::header::{HeaderValue, AUTHORIZATION, CONTENT_TYPE, ACCEPT, COOKIE};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
+
+use handlers::{alerts, assets, auth as auth_handlers, debug, device, health, probe, proxy, scan, version, ws, ws_technician};
+use redis_helpers::with_redis;
+use state::AppState;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    dotenvy::from_path(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join(".env")
+    ).expect("Failed to load .env");
+
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+        )
+        .init();
+
+    info!("NextBit Gateway starting...");
+
+    let ml = reqwest::Client::new();
+    info!("ML client ready");
+
+    let pg = PgPool::connect(&std::env::var("DATABASE_URL").expect("DATABASE_URL not set")).await?;
+    info!("Postgres connected");
+    sqlx::migrate!("./migrations").run(&pg).await?;
+    info!("Postgres schema ready");
+
+    let mongo_client = MongoClient::with_uri_str(&std::env::var("MONGO_URL").expect("MONGO_URL not set")).await?;
+    let mongo = mongo_client.database("nextbit");
+    info!("MongoDB connected");
+
+    let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL not set");
+    let redis = Arc::new(RedisClient::open(redis_url.as_str())?);
+    with_redis(redis.clone(), |conn| {
+        let _: String = redis::cmd("PING").query(conn)?;
+        Ok(())
+    }).await?;
+    info!("Redis connected");
+
+    let catalogue_url = std::env::var("CATALOGUE_URL")
+        .unwrap_or_else(|_| "http://localhost:8001".to_string());
+    let ml_url = std::env::var("ML_URL")
+        .unwrap_or_else(|_| "http://localhost:8000".to_string());
+
+    let internal_api_key = std::env::var("INTERNAL_API_KEY")
+        .unwrap_or_else(|_| "nextbit_internal_secret_2026".to_string());
+    let state = Arc::new(AppState { pg, mongo, redis, ml, catalogue_url, ml_url, internal_api_key });
+
+    // ── Public routes (no auth required) ─────────────────────────────
+    let public = Router::new()
+        .route("/health",                get(health::health_handler))
+        .route("/api/auth",              any(proxy::proxy_catalogue))
+        .route("/api/auth/*path",        any(proxy::proxy_catalogue))
+        .route("/api/auth/login",        post(auth_handlers::login))
+        .route("/api/auth/logout",       post(auth_handlers::logout))
+        .route("/api/auth/register",     post(auth_handlers::register))
+        .route("/api/products",          any(proxy::proxy_catalogue))
+        .route("/api/products/*path",    any(proxy::proxy_catalogue))
+        .route("/api/categories",        any(proxy::proxy_catalogue))
+        .route("/api/categories/*path",  any(proxy::proxy_catalogue))
+        .route("/api/branches",          any(proxy::proxy_catalogue))
+        .route("/api/branches/*path",    any(proxy::proxy_catalogue))
+        .route("/api/settings",          any(proxy::proxy_catalogue))
+        .route("/api/settings/*path",    any(proxy::proxy_catalogue))
+        .route("/api/content",           any(proxy::proxy_catalogue))
+        .route("/api/content/*path",     any(proxy::proxy_catalogue))
+        .route("/api/ws/announcements",  get(ws::ws_announcements))
+        .route("/api/settings/ws",       get(ws::ws_settings))
+        .route("/api/probe/submit",      post(probe::submit_probe))
+        .route("/api/probe/version",     get(version::get_version))
+        .route("/api/devices",           get(device::get_all_devices))
+        .route("/api/devices/:id",       get(device::get_device))
+        .route("/api/devices/:id/scans", get(scan::get_device_scans))
+        .route("/api/devices/:id/scans/:sid", get(scan::get_scan));
+
+    // ── Protected routes (JWT required) ──────────────────────────────
+    let protected = Router::new()
+        .route("/api/auth/me",                           get(proxy::proxy_catalogue))
+        .route("/api/orders",                            any(proxy::proxy_catalogue))
+        .route("/api/orders/*path",                      any(proxy::proxy_catalogue))
+        .route("/api/cart",                              any(proxy::proxy_catalogue))
+        .route("/api/cart/*path",                        any(proxy::proxy_catalogue))
+        .route("/api/addresses",                         any(proxy::proxy_catalogue))
+        .route("/api/addresses/*path",                   any(proxy::proxy_catalogue))
+        .route("/api/wishlist",                          any(proxy::proxy_catalogue))
+        .route("/api/wishlist/*path",                    any(proxy::proxy_catalogue))
+        .route("/api/delivery",                          any(proxy::proxy_catalogue))
+        .route("/api/delivery/*path",                    any(proxy::proxy_catalogue))
+        .route("/api/technician/ws/:user_id", get(ws_technician::proxy_ws_technician))
+        .route("/api/admin/customers",                   any(proxy::proxy_catalogue))
+        .route("/api/admin/customers/ws",                get(ws::ws_customers))
+        .route("/api/ws/admin/stats",                    get(ws::ws_admin_stats))
+        .route("/api/admin",                             any(proxy::proxy_catalogue))
+        .route("/api/admin/*path",                       any(proxy::proxy_catalogue))
+        .route("/api/probe/hardware",                    post(probe::submit_hardware))
+        .route("/api/probe/hardware/{device_id}",        get(probe::get_hardware_reports))
+        .route("/api/probe/hardware/{device_id}/latest", get(probe::get_latest_hardware))
+        .route("/api/probe/network",                     post(probe::submit_network))
+        .route("/api/probe/network/{device_id}",         get(probe::get_network_reports))
+        .route("/api/alerts",                            get(alerts::get_alerts))
+        .route("/api/assets",                            post(assets::register_asset))
+        .route("/api/assets",                            get(assets::list_assets))
+        .route("/api/assets/{device_id}",                get(assets::get_asset))
+        .route("/api/assets/{device_id}",                patch(assets::update_asset))
+        .route("/api/assets/{device_id}",                delete(assets::delete_asset))
+        .route("/api/assets/{device_id}/report",         get(assets::get_full_report))
+        .route("/api/ml/forecast",                       post(proxy::ml_forecast))
+        .route("/api/ml/hardware",                       post(proxy::ml_hardware))
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            middleware::auth::require_auth,
+        ));
+
+    // ── Debug routes (internal only) ──────────────────────────────────
+    let debug_routes = Router::new()
+        .route("/debug/postgres", get(debug::debug_postgres))
+        .route("/debug/mongo",    get(debug::debug_mongo))
+        .route("/debug/redis",    get(debug::debug_redis));
+
+    let app = Router::new()
+        .nest("/api/b2b",       routes::b2b::b2b_router(state.clone()))
+        .nest("/api/admin/b2b", routes::b2b::admin_b2b_router(state.clone()))
+        .merge(public)
+        .merge(protected)
+        .merge(debug_routes)
+        .with_state(state)
+        .layer(
+            CorsLayer::new()
+                .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+                .allow_methods([
+                    axum::http::Method::GET,
+                    axum::http::Method::POST,
+                    axum::http::Method::PUT,
+                    axum::http::Method::PATCH,
+                    axum::http::Method::DELETE,
+                    axum::http::Method::OPTIONS,
+                ])
+                .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT, COOKIE])
+                .allow_credentials(true)
+        )
+        .layer(TraceLayer::new_for_http());
+
+    let port = std::env::var("GATEWAY_PORT").unwrap_or_else(|_| "8080".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    info!("Gateway listening on {}", addr);
+    axum::serve(listener, app).await?;
+    Ok(())
+}
