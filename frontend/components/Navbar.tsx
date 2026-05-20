@@ -37,6 +37,7 @@ import {
   CreditCard,
   Crown,
   Activity,
+  List,
 } from "lucide-react";
 import { dynamicIconMap } from "@/lib/iconMap";
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -716,12 +717,12 @@ export default function Navbar() {
         <>
           {mobileOpen && (
             <div
-              className="fixed inset-0 bg-black/60 z-[2147483647] md:hidden backdrop-blur-sm transition-opacity"
+              className="fixed inset-0 bg-black/60 z-[2147483647] lg:hidden backdrop-blur-sm transition-opacity"
               onClick={() => setMobileOpen(false)}
             />
           )}
           <div
-            className={`fixed top-0 left-0 h-full w-[85%] max-w-sm bg-background border-r border-border z-[2147483647] transform transition-transform duration-300 ease-in-out md:hidden flex flex-col shadow-2xl ${
+            className={`fixed top-0 left-0 h-full w-[85%] max-w-sm bg-background border-r border-border z-[2147483647] transform transition-transform duration-300 ease-in-out lg:hidden flex flex-col shadow-2xl ${
               mobileOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
@@ -795,8 +796,9 @@ export default function Navbar() {
                   {[
                     { href: "/repairs", label: "Repairs & Parts", icon: <Wrench className="w-4 h-4" /> },
                     { href: "/e-waste", label: "E-Waste & Trade-In", icon: <Recycle className="w-4 h-4" /> },
+                    { href: "/listings", label: "Listings", icon: <List className="w-4 h-4" /> },
                     { href: "/insurance", label: "Insurance", icon: <Shield className="w-4 h-4" /> },
-                    { href: "/cards", label: "Financial Suite", icon: <CreditCard className="w-4 h-4" /> },
+                    { href: "/financial-suite", label: "Financial Suite", icon: <CreditCard className="w-4 h-4" /> },
                     { href: "/vip", label: "VIP Services", icon: <Crown className="w-4 h-4" /> },
                     { href: "/conflicts", label: "Resolution Hub", icon: <Headphones className="w-4 h-4" /> },
                   ].map(({ href, label, icon }) => (
@@ -950,6 +952,12 @@ export default function Navbar() {
                       E-Waste & Trade-In
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/listings" className="flex items-center gap-2 cursor-pointer">
+                      <List className="w-4 h-4" />
+                      Listings
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href="/insurance" className="flex items-center gap-2 cursor-pointer">
@@ -958,7 +966,7 @@ export default function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/cards" className="flex items-center gap-2 cursor-pointer">
+                    <Link href="/financial-suite" className="flex items-center gap-2 cursor-pointer">
                       <CreditCard className="w-4 h-4" />
                       Financial Suite
                     </Link>
@@ -1118,7 +1126,7 @@ export default function Navbar() {
               </Button>
 
               {/* Mobile menu toggle */}
-              <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open mobile menu">
+              <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open mobile menu">
                 <Menu className="w-4 h-4" />
               </Button>
             </div>

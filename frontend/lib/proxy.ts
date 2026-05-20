@@ -4,6 +4,7 @@ export async function proxyToCatalogue(request: Request, upstreamPath?: string):
   const url = new URL(request.url);
   const path = upstreamPath ?? url.pathname + url.search;
   const upstream = `${CATALOGUE}${path}`;
+  console.log('[proxyToCatalogue] incoming', request.method, request.url, '->', upstream);
 
   const headers = new Headers(request.headers);
   headers.delete('host');
@@ -17,6 +18,7 @@ export async function proxyToCatalogue(request: Request, upstreamPath?: string):
   const body = ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer();
 
   const res = await fetch(upstream, { method: request.method, headers, body });
+  console.log('[proxyToCatalogue] upstream response', res.status, upstream);
 
   // Copy response headers but rewrite set-cookie to come from :3000
   const resHeaders = new Headers();

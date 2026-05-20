@@ -25,10 +25,15 @@ const nextConfig: NextConfig = {
       { source: '/api/technician/ws/:path*', destination: 'http://127.0.0.1:8001/api/technician/ws/:path*',},
       { source: '/api/auth/:path*', destination: 'http://127.0.0.1:8001/api/auth/:path*' },
       { source: '/api/admin/:path*', destination: 'http://127.0.0.1:8001/api/admin/:path*' },
+      { source: '/api/insurance', destination: 'http://127.0.0.1:8001/api/insurance' },
+      { source: '/api/insurance/:path*', destination: 'http://127.0.0.1:8001/api/insurance/:path*' },
+      { source: '/api/admin/insurance', destination: 'http://127.0.0.1:8001/api/admin/insurance' },
+      { source: '/api/admin/insurance/:path*', destination: 'http://127.0.0.1:8001/api/admin/insurance/:path*' },
       
       // ✅ ADD TECHNICIAN AND REPAIRS ROUTES HERE
       { source: '/api/technician/:path*', destination: 'http://127.0.0.1:8001/api/technician/:path*' },
       { source: '/api/repairs/:path*', destination: 'http://127.0.0.1:8001/api/repairs/:path*' },
+      { source: '/api/tradein/:path*', destination: 'http://127.0.0.1:8001/api/tradein/:path*' },
       { source: '/api/categories', destination: 'http://127.0.0.1:8001/api/categories/' },
       { source: '/api/categories/:path*', destination: 'http://127.0.0.1:8001/api/categories/:path*' },
       { source: '/api/orders/:path*', destination: 'http://127.0.0.1:8001/api/orders/:path*' },
@@ -41,6 +46,10 @@ const nextConfig: NextConfig = {
       { source: '/api/content/:path*', destination: 'http://127.0.0.1:8001/api/content/:path*' },
       { source: '/api/customers/:path*', destination: 'http://127.0.0.1:8001/api/customers/:path*' },
       { source: '/api/addresses/:path*', destination: 'http://127.0.0.1:8001/api/addresses/:path*' },
+      { source: '/api/vip', destination: 'http://127.0.0.1:8001/api/vip' },
+      { source: '/api/vip/:path*', destination: 'http://127.0.0.1:8001/api/vip/:path*' },
+      { source: '/api/admin/vip', destination: 'http://127.0.0.1:8001/api/admin/vip' },
+      { source: '/api/admin/vip/:path*', destination: 'http://127.0.0.1:8001/api/admin/vip/:path*' },
     ];
   },
 };

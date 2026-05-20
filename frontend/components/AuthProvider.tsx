@@ -11,7 +11,7 @@ import { AuthContext, AuthContextType } from '@/contexts/AuthContext';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   const wasAuthenticated = useRef(false);
   const authReadyResolvers = useRef<Array<() => void>>([]);
   const { startSync, endSync } = useCartSync();
@@ -72,6 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleAuthChange = () => refetchUser();
     window.addEventListener("userAuthChanged", handleAuthChange);
     return () => window.removeEventListener("userAuthChanged", handleAuthChange);
+  }, [refetchUser]);
+
+  useEffect(() => {
+    refetchUser();
   }, [refetchUser]);
 
   const { mutate: logoutMutate } = useMutation(

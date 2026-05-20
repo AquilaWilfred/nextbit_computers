@@ -2,14 +2,23 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
-from routers import auth, products, orders, cart, categories, settings, branches, addresses, wishlist, delivery, admin, content, customers, network, technician, repairs
+from routers import (
+    auth, products, orders, cart, categories,
+    settings, branches, addresses, wishlist,
+    delivery, admin, content, customers, network,
+    technician, repairs, conflicts, visa,
+    admin_visa, vip, admin_vip, ewaste, admin_ewaste,
+    insurance, admin_insurance, tradein, admin_tradein
+)
 from routers.payments import router as payments
 from db.postgres import engine, Base
 from models import auth as auth_model, product, order, b2b as b2b_model, lpo, invoice, credit, supplier, technician as technician_model, part as part_model
+import models.insurance.insurance as insurance_model
+import models.listings.tradein as tradein_model
 from routers.b2b import router as b2b_router
 
 
-app = FastAPI(title="NEXTBIT Catalogue API", version="1.0.0", redirect_slashes=False)
+app = FastAPI(title="NEXTBIT Catalogue API", version="1.0.0", redirect_slashes=True)
 
 Base.metadata.create_all(bind=engine)
 
@@ -46,6 +55,7 @@ app.include_router(branches,   prefix="/api/branches",   tags=["branches"])
 app.include_router(addresses,  prefix="/api/addresses",  tags=["addresses"])
 app.include_router(wishlist,   prefix="/api/wishlist",   tags=["wishlist"])
 app.include_router(delivery,   prefix="/api/delivery",   tags=["delivery"])
+app.include_router(conflicts,  prefix="",                 tags=["conflicts"])
 app.include_router(admin,      prefix="/api/admin",      tags=["admin"])
 app.include_router(b2b_router, prefix="/api/b2b", tags=["b2b"])
 app.include_router(b2b_router, prefix="/api/admin/b2b", tags=["admin-b2b"])
@@ -53,10 +63,20 @@ app.include_router(payments,   prefix="/api/admin/payments", tags=["admin-paymen
 app.include_router(content,    prefix="/api/content",    tags=["content"])
 app.include_router(customers,   prefix="/api/customers",  tags=["customers"])
 app.include_router(technician,  prefix="/api/technician", tags=["technician"])
-app.include_router(repairs.router, prefix="/api/repairs",    tags=["repairs"])
-app.include_router(network.router, prefix="/api/admin/network", tags=["network"])
-app.include_router(network.router, prefix="/network",            tags=["network-internal"])
+app.include_router(repairs, prefix="/api/repairs",    tags=["repairs"])
+app.include_router(network, prefix="/api/admin/network", tags=["network"])
+app.include_router(network, prefix="/network",            tags=["network-internal"])
 app.include_router(customers,   prefix="/api/admin/customers", tags=["admin-customers"])
+app.include_router(visa,   prefix="/api/cards",               tags=["visa"])
+app.include_router(admin_visa,   prefix="/api/admin/cards",   tags=["admin-visa"])
+app.include_router(vip,   prefix="/api/vip",               tags=["vip"])
+app.include_router(admin_vip,   prefix="/api/admin/vip",   tags=["admin-vip"])
+app.include_router(insurance)
+app.include_router(admin_insurance)
+app.include_router(ewaste)
+app.include_router(admin_ewaste)
+app.include_router(tradein)
+app.include_router(admin_tradein)
 
 # Connection manager
 class AnnouncementManager:

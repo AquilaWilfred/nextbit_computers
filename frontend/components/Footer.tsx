@@ -177,7 +177,7 @@ export default function Footer() {
                 { label: "Repairs & Parts", href: "/repairs" },
                 { label: "E-Waste Trade-In", href: "/e-waste" },
                 { label: "Insurance", href: "/insurance" },
-                { label: "Financial Suite", href: "/cards" },
+                { label: "Financial Suite", href: "/visa" },
                 { label: "VIP Program", href: "/vip" },
                 { label: "Resolution Hub", href: "/conflicts" },
                 { label: "Diagnostics", href: "/dashboard/diagnostics" },

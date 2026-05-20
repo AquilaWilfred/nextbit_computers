@@ -17,6 +17,11 @@ import {
   Network,
   Building2,
   AlertCircle,
+  List,
+  Recycle,
+  Shield,
+  Crown,
+  Wallet,
 } from "lucide-react";
 
 export const ADMIN_NAV_ITEMS = [
@@ -28,6 +33,11 @@ export const ADMIN_NAV_ITEMS = [
   { key: "products", label: "Products", href: "/admin/products", icon: ShoppingCart },
   { key: "brands", label: "Brands", href: "/admin/brands", icon: Tag },
   { key: "categories", label: "Categories", href: "/admin/categories", icon: Layers },
+  { key: "listings", label: "Listings", href: "/admin/listings", icon: List },
+  { key: "e-waste", label: "E-Waste & Trade-In", href: "/admin/e-waste", icon: Recycle },
+  { key: "insurance", label: "Insurance", href: "/admin/insurance", icon: Shield },
+  { key: "vip", label: "VIP Services", href: "/admin/vip", icon: Crown },
+  { key: "financial-suite", label: "Financial Suite", href: "/admin/financial-suite", icon: Wallet },
   { key: "payments", label: "Payments", href: "/admin/payments", icon: CreditCard },
   { key: "analytics", label: "Analytics", href: "/admin/analytics", icon: TrendingUp },
   { key: "drivers", label: "Drivers", href: "/admin/drivers", icon: Truck },

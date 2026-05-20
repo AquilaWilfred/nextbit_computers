@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,12 +11,14 @@ import {
   AlertCircle, CheckCircle, Clock, MessageSquare, Search, Filter,
   ArrowUpCircle, Star, User, ThumbsUp, FileText, X, Send,
   Download, ExternalLink, Wrench, Shield, RefreshCw, Package,
-  Users, BarChart2, TrendingUp, Inbox, ChevronDown, Paperclip,
-  Edit2, UserCheck, AlertTriangle, CheckSquare,
+  Users, Inbox, ChevronDown, Paperclip,
+  Edit2, UserCheck, AlertTriangle, CheckSquare, Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/auth/useAuth";
 
 // ─────────────────────────────────────────────
-// TYPES  (import from shared types file in real app)
+// TYPES (match backend schemas)
 // ─────────────────────────────────────────────
 
 type Priority = "low" | "medium" | "high" | "urgent";
@@ -49,30 +51,58 @@ interface TimelineEvent {
 }
 
 interface ConflictReport {
-  id: string;
+  id: number;
+  reference_number: string;
   type: string;
   title: string;
   description: string;
   status: Status;
   priority: Priority;
-  createdAt: string;
-  updatedAt: string;
-  customerName: string;
-  customerEmail: string;
-  referenceId?: string;
-  referenceType?: string;
-  assignedAgent?: string;
-  slaDeadline?: string;
+  created_at: string;
+  updated_at: string;
+  customer_name: string;
+  customer_email: string;
+  reference_id?: string;
+  reference_type?: string;
+  assigned_agent_name?: string;
+  sla_deadline?: string;
   resolution?: string;
-  resolutionStatus?: "pending_acceptance" | "accepted" | "rejected";
-  satisfactionRating?: number;
-  satisfactionComment?: string;
+  resolution_status?: "pending_acceptance" | "accepted" | "rejected";
+  satisfaction_rating?: number;
+  satisfaction_comment?: string;
   attachments: Attachment[];
   timeline: TimelineEvent[];
 }
 
+// Helper to convert backend format to frontend format
+function mapConflict(conflict: any): ConflictReport {
+  return {
+    id: conflict.id,
+    reference_number: conflict.reference_number,
+    type: conflict.type,
+    title: conflict.title,
+    description: conflict.description,
+    status: conflict.status,
+    priority: conflict.priority,
+    created_at: conflict.created_at,
+    updated_at: conflict.updated_at,
+    customer_name: conflict.customer_name,
+    customer_email: conflict.customer_email,
+    reference_id: conflict.reference_id,
+    reference_type: conflict.reference_type,
+    assigned_agent_name: conflict.assigned_agent_name,
+    sla_deadline: conflict.sla_deadline,
+    resolution: conflict.resolution,
+    resolution_status: conflict.resolution_status,
+    satisfaction_rating: conflict.satisfaction_rating,
+    satisfaction_comment: conflict.satisfaction_comment,
+    attachments: conflict.attachments || [],
+    timeline: conflict.timeline || [],
+  };
+}
+
 // ─────────────────────────────────────────────
-// AGENTS
+// AGENTS (from backend)
 // ─────────────────────────────────────────────
 
 const AGENTS = [
@@ -84,114 +114,23 @@ const AGENTS = [
 ];
 
 // ─────────────────────────────────────────────
-// MOCK DATA
+// API SERVICE
 // ─────────────────────────────────────────────
 
-const mockConflicts: ConflictReport[] = [
-  {
-    id: "CR-2024-001",
-    type: "repair-service",
-    title: "Repair Service Quality Dispute",
-    description: "Technician completed repair but device still has issues. Customer claims work was substandard.",
-    status: "investigating",
-    priority: "high",
-    createdAt: "2024-01-15T10:30:00Z",
-    updatedAt: "2024-01-16T14:20:00Z",
-    customerName: "Aisha Kamau",
-    customerEmail: "aisha.kamau@email.com",
-    referenceId: "RPR-7821",
-    referenceType: "repair_ticket",
-    assignedAgent: "Grace Wambui",
-    slaDeadline: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-    attachments: [{ name: "repair_invoice.pdf", size: 124000, type: "application/pdf" }],
-    timeline: [
-      { id: "t1", timestamp: "2024-01-15T10:30:00Z", actor: "user", actorName: "Aisha Kamau", type: "message", content: "Filed conflict report regarding poor repair quality." },
-      { id: "t2", timestamp: "2024-01-15T11:00:00Z", actor: "system", actorName: "System", type: "status_change", content: "Status changed to Investigating." },
-      { id: "t3", timestamp: "2024-01-16T14:20:00Z", actor: "agent", actorName: "Grace Wambui", type: "message", content: "We have contacted the technician and are reviewing the repair logs." },
-    ],
-  },
-  {
-    id: "CR-2024-002",
-    type: "insurance-claim",
-    title: "Insurance Claim Delay",
-    description: "Device insurance claim filed 2 weeks ago, no response from claims department.",
-    status: "escalated",
-    priority: "urgent",
-    createdAt: "2024-01-14T09:15:00Z",
-    updatedAt: "2024-01-17T08:00:00Z",
-    customerName: "Peter Otieno",
-    customerEmail: "peter.otieno@email.com",
-    referenceId: "INS-CLM-4432",
-    referenceType: "insurance_claim",
-    assignedAgent: "David Mwangi",
-    slaDeadline: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
-    attachments: [],
-    timeline: [
-      { id: "t1", timestamp: "2024-01-14T09:15:00Z", actor: "user", actorName: "Peter Otieno", type: "message", content: "Filed conflict for delayed claim." },
-      { id: "t2", timestamp: "2024-01-17T08:00:00Z", actor: "agent", actorName: "David Mwangi", type: "escalation", content: "Escalated to senior claims team." },
-    ],
-  },
-  {
-    id: "CR-2024-003",
-    type: "e-waste-tradein",
-    title: "Trade-in Value Disagreement",
-    description: "Customer disagrees with offered trade-in value for old device.",
-    status: "resolved",
-    priority: "low",
-    createdAt: "2024-01-10T16:45:00Z",
-    updatedAt: "2024-01-12T11:30:00Z",
-    customerName: "Lucy Wanjiru",
-    customerEmail: "lucy.w@email.com",
-    referenceId: "TRD-991",
-    referenceType: "trade_in",
-    assignedAgent: "Mercy Atieno",
-    resolution: "Agreed to increase trade-in value by 15% and provided KES 500 recycling credits.",
-    resolutionStatus: "accepted",
-    satisfactionRating: 4,
-    attachments: [],
-    timeline: [
-      { id: "t1", timestamp: "2024-01-10T16:45:00Z", actor: "user", actorName: "Lucy Wanjiru", type: "message", content: "Dispute over trade-in valuation." },
-      { id: "t2", timestamp: "2024-01-11T09:00:00Z", actor: "agent", actorName: "Mercy Atieno", type: "resolution_proposed", content: "Proposing 15% increase plus KES 500 recycling credits." },
-      { id: "t3", timestamp: "2024-01-12T11:30:00Z", actor: "user", actorName: "Lucy Wanjiru", type: "resolution_accepted", content: "Resolution accepted." },
-    ],
-  },
-  {
-    id: "CR-2024-004",
-    type: "payment-dispute",
-    title: "Double Charged for Repair",
-    description: "Customer was charged twice for the same repair service. M-Pesa records confirm two transactions.",
-    status: "pending",
-    priority: "high",
-    createdAt: "2024-01-18T07:00:00Z",
-    updatedAt: "2024-01-18T07:00:00Z",
-    customerName: "Samuel Maina",
-    customerEmail: "samuel.maina@email.com",
-    referenceId: "RPR-8100",
-    referenceType: "repair_ticket",
-    slaDeadline: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    attachments: [{ name: "mpesa_statement.pdf", size: 89000, type: "application/pdf" }],
-    timeline: [
-      { id: "t1", timestamp: "2024-01-18T07:00:00Z", actor: "user", actorName: "Samuel Maina", type: "message", content: "I was charged twice — KES 6,000 deducted two times on Jan 17." },
-    ],
-  },
-  {
-    id: "CR-2024-005",
-    type: "vip-service",
-    title: "VIP Pickup Not Arranged",
-    description: "VIP customer booked device pickup 3 days ago. No driver was dispatched.",
-    status: "pending",
-    priority: "urgent",
-    createdAt: "2024-01-18T06:30:00Z",
-    updatedAt: "2024-01-18T06:30:00Z",
-    customerName: "Amina Hassan",
-    customerEmail: "amina.h@enterprise.co.ke",
-    slaDeadline: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    attachments: [],
-    timeline: [
-      { id: "t1", timestamp: "2024-01-18T06:30:00Z", actor: "user", actorName: "Amina Hassan", type: "message", content: "VIP pickup was never arranged. This is unacceptable." },
-    ],
-  },
-];
+const API_BASE = "/api/conflicts";
+
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `API error ${res.status}`);
+  }
+  return res.json();
+}
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -292,9 +231,9 @@ function StatsBar({ conflicts }: { conflicts: ConflictReport[] }) {
   const escalated = conflicts.filter((c) => c.status === "escalated").length;
   const resolved = conflicts.filter((c) => c.status === "resolved").length;
   const breached = conflicts.filter(
-    (c) => c.slaDeadline && c.status !== "resolved" && new Date(c.slaDeadline).getTime() < Date.now()
+    (c) => c.sla_deadline && c.status !== "resolved" && new Date(c.sla_deadline).getTime() < Date.now()
   ).length;
-  const rated = conflicts.filter((c) => c.satisfactionRating).map((c) => c.satisfactionRating!);
+  const rated = conflicts.filter((c) => c.satisfaction_rating).map((c) => c.satisfaction_rating!);
   const avgRating = rated.length ? (rated.reduce((a, b) => a + b, 0) / rated.length).toFixed(1) : "—";
 
   const stats = [
@@ -328,19 +267,11 @@ function StatsBar({ conflicts }: { conflicts: ConflictReport[] }) {
 function AdminDetailPanel({
   conflict,
   onClose,
-  onStatusChange,
-  onAssignAgent,
-  onPostMessage,
-  onProposeResolution,
-  onSlaOverride,
+  onRefresh,
 }: {
   conflict: ConflictReport;
   onClose: () => void;
-  onStatusChange: (id: string, status: Status) => void;
-  onAssignAgent: (id: string, agent: string) => void;
-  onPostMessage: (id: string, text: string, files: Attachment[]) => void;
-  onProposeResolution: (id: string, text: string) => void;
-  onSlaOverride: (id: string, hours: number) => void;
+  onRefresh: () => void;
 }) {
   const [message, setMessage] = useState("");
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
@@ -348,6 +279,9 @@ function AdminDetailPanel({
   const [showResolutionForm, setShowResolutionForm] = useState(false);
   const [slaHoursInput, setSlaHoursInput] = useState("");
   const [showSlaForm, setShowSlaForm] = useState(false);
+  const [status, setStatus] = useState<Status>(conflict.status);
+  const [assignedAgent, setAssignedAgent] = useState(conflict.assigned_agent_name ?? "unassigned");
+  const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,11 +289,102 @@ function AdminDetailPanel({
     setPendingFiles((prev) => [...prev, ...files.map((f) => ({ name: f.name, size: f.size, type: f.type }))]);
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!message.trim() && pendingFiles.length === 0) return;
-    onPostMessage(conflict.id, message, pendingFiles);
-    setMessage("");
-    setPendingFiles([]);
+    setLoading(true);
+    try {
+      await apiFetch(`${API_BASE}/admin/${conflict.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ text: message, attachments: pendingFiles }),
+      });
+      toast.success("Message sent");
+      setMessage("");
+      setPendingFiles([]);
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send message");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: Status) => {
+    setLoading(true);
+    try {
+      await apiFetch(`${API_BASE}/admin/${conflict.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setStatus(newStatus);
+      toast.success(`Status changed to ${newStatus}`);
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update status");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAssignAgent = async (agentName: string) => {
+    setLoading(true);
+    const assignedAgentName = agentName === "unassigned" ? "" : agentName;
+    try {
+      await apiFetch(`${API_BASE}/admin/${conflict.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ assigned_agent_name: assignedAgentName }),
+      });
+      setAssignedAgent(agentName);
+      toast.success(agentName === "unassigned" ? "Agent unassigned" : `Assigned to ${agentName}`);
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to assign agent");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProposeResolution = async () => {
+    if (!resolutionText.trim()) {
+      toast.error("Please enter a resolution");
+      return;
+    }
+    setLoading(true);
+    try {
+      await apiFetch(`${API_BASE}/admin/${conflict.id}/resolution`, {
+        method: "POST",
+        body: JSON.stringify({ text: resolutionText }),
+      });
+      toast.success("Resolution proposed to customer");
+      setShowResolutionForm(false);
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to propose resolution");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSlaOverride = async () => {
+    const hours = parseInt(slaHoursInput);
+    if (isNaN(hours) || hours <= 0) {
+      toast.error("Please enter valid hours");
+      return;
+    }
+    setLoading(true);
+    try {
+      await apiFetch(`${API_BASE}/admin/${conflict.id}/sla-override`, {
+        method: "POST",
+        body: JSON.stringify({ hours }),
+      });
+      toast.success(`SLA deadline extended by ${hours} hours`);
+      setShowSlaForm(false);
+      setSlaHoursInput("");
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to override SLA");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -372,10 +397,10 @@ function AdminDetailPanel({
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-start justify-between z-10">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <StatusIcon status={conflict.status} />
+              <StatusIcon status={status} />
               <span className="font-semibold text-lg">{conflict.title}</span>
             </div>
-            <p className="text-sm text-gray-500">{conflict.id} · {conflict.customerName}</p>
+            <p className="text-sm text-gray-500">{conflict.reference_number} · {conflict.customer_name}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4 mt-1">
             <X className="h-5 w-5" />
@@ -383,25 +408,21 @@ function AdminDetailPanel({
         </div>
 
         <div className="px-6 py-4 space-y-6">
-
-          {/* ── Customer info ── */}
+          {/* Customer info */}
           <div className="border rounded-lg px-4 py-3 flex items-center gap-3">
-            <AgentAvatar name={conflict.customerName} size="md" />
+            <AgentAvatar name={conflict.customer_name} size="md" />
             <div>
-              <p className="font-medium text-sm">{conflict.customerName}</p>
-              <p className="text-xs text-gray-500">{conflict.customerEmail}</p>
+              <p className="font-medium text-sm">{conflict.customer_name}</p>
+              <p className="text-xs text-gray-500">{conflict.customer_email}</p>
             </div>
           </div>
 
-          {/* ── Admin controls ── */}
+          {/* Admin controls */}
           <div className="grid grid-cols-2 gap-4">
             {/* Status change */}
             <div>
               <p className="text-xs font-medium text-gray-500 mb-1.5">Change Status</p>
-              <Select
-                value={conflict.status}
-                onValueChange={(v) => onStatusChange(conflict.id, v as Status)}
-              >
+              <Select value={status} onValueChange={(v) => handleStatusChange(v as Status)}>
                 <SelectTrigger className="text-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -417,14 +438,12 @@ function AdminDetailPanel({
             {/* Assign agent */}
             <div>
               <p className="text-xs font-medium text-gray-500 mb-1.5">Assigned Agent</p>
-              <Select
-                value={conflict.assignedAgent ?? ""}
-                onValueChange={(v) => onAssignAgent(conflict.id, v)}
-              >
+              <Select value={assignedAgent} onValueChange={handleAssignAgent}>
                 <SelectTrigger className="text-sm">
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
                   {AGENTS.map((a) => (
                     <SelectItem key={a.id} value={a.name}>
                       <div className="flex items-center gap-2">
@@ -444,18 +463,18 @@ function AdminDetailPanel({
               <p className="text-gray-500 mb-1">Priority</p>
               <Badge className={priorityColors[conflict.priority]}>{conflict.priority.toUpperCase()}</Badge>
             </div>
-            {conflict.referenceId && (
+            {conflict.reference_id && (
               <div>
                 <p className="text-gray-500 mb-1">Reference</p>
-                <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{conflict.referenceId}</span>
+                <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{conflict.reference_id}</span>
               </div>
             )}
           </div>
 
           {/* SLA */}
-          {conflict.slaDeadline && conflict.status !== "resolved" && (
+          {conflict.sla_deadline && status !== "resolved" && (
             <div>
-              <SlaTimer deadline={conflict.slaDeadline} priority={conflict.priority} />
+              <SlaTimer deadline={conflict.sla_deadline} priority={conflict.priority} />
               <button
                 className="mt-2 text-xs text-blue-600 hover:underline"
                 onClick={() => setShowSlaForm(!showSlaForm)}
@@ -472,14 +491,7 @@ function AdminDetailPanel({
                     onChange={(e) => setSlaHoursInput(e.target.value)}
                     className="w-40 text-sm"
                   />
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      onSlaOverride(conflict.id, Number(slaHoursInput));
-                      setShowSlaForm(false);
-                      setSlaHoursInput("");
-                    }}
-                  >
+                  <Button size="sm" onClick={handleSlaOverride} disabled={loading}>
                     Apply
                   </Button>
                 </div>
@@ -510,26 +522,26 @@ function AdminDetailPanel({
           )}
 
           {/* Satisfaction rating (read-only on admin side) */}
-          {conflict.satisfactionRating && (
+          {conflict.satisfaction_rating && (
             <div className="border rounded-lg px-4 py-3">
               <p className="text-sm font-medium mb-2">Customer Satisfaction</p>
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <Star
                     key={n}
-                    className={`h-5 w-5 ${n <= conflict.satisfactionRating! ? "text-yellow-400 fill-yellow-400" : "text-gray-200"}`}
+                    className={`h-5 w-5 ${n <= conflict.satisfaction_rating! ? "text-yellow-400 fill-yellow-400" : "text-gray-200"}`}
                   />
                 ))}
-                <span className="text-sm text-gray-600 ml-1">{conflict.satisfactionRating}/5</span>
+                <span className="text-sm text-gray-600 ml-1">{conflict.satisfaction_rating}/5</span>
               </div>
-              {conflict.satisfactionComment && (
-                <p className="text-sm text-gray-500 mt-1 italic">"{conflict.satisfactionComment}"</p>
+              {conflict.satisfaction_comment && (
+                <p className="text-sm text-gray-500 mt-1 italic">"{conflict.satisfaction_comment}"</p>
               )}
             </div>
           )}
 
           {/* Propose resolution */}
-          {conflict.status !== "resolved" && (
+          {status !== "resolved" && (
             <div className="border rounded-lg p-4">
               <button
                 className="flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800"
@@ -547,13 +559,7 @@ function AdminDetailPanel({
                     rows={3}
                     className="text-sm"
                   />
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      onProposeResolution(conflict.id, resolutionText);
-                      setShowResolutionForm(false);
-                    }}
-                  >
+                  <Button size="sm" onClick={handleProposeResolution} disabled={loading}>
                     Send to Customer
                   </Button>
                 </div>
@@ -618,8 +624,9 @@ function AdminDetailPanel({
               </div>
             )}
             <div className="flex items-center gap-2">
-              <Button size="sm" onClick={sendMessage} className="gap-1.5">
-                <Send className="h-3.5 w-3.5" /> Send
+              <Button size="sm" onClick={sendMessage} disabled={loading} className="gap-1.5">
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                Send
               </Button>
               <button className="text-gray-400 hover:text-gray-600" onClick={() => fileRef.current?.click()}>
                 <Paperclip className="h-4 w-4" />
@@ -638,12 +645,43 @@ function AdminDetailPanel({
 // ─────────────────────────────────────────────
 
 export default function AdminConflictsPage() {
-  const [conflicts, setConflicts] = useState<ConflictReport[]>(mockConflicts);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { user, isAuthenticated } = useAuth();
+  const [conflicts, setConflicts] = useState<ConflictReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<Status | "all">("all");
   const [filterPriority, setFilterPriority] = useState<Priority | "all">("all");
   const [filterAgent, setFilterAgent] = useState<string>("all");
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchConflicts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = new URLSearchParams();
+      if (filterStatus !== "all") params.set("status", filterStatus);
+      if (filterPriority !== "all") params.set("priority", filterPriority);
+      const url = `${API_BASE}/admin/all?${params.toString()}`;
+      const data = await apiFetch<any[]>(url);
+      setConflicts(data.map(mapConflict));
+    } catch (err: any) {
+      const message = err?.message || "Failed to load conflicts";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterStatus, filterPriority]);
+
+  useEffect(() => {
+    fetchConflicts();
+    pollingRef.current = setInterval(fetchConflicts, 30000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [fetchConflicts]);
 
   const selectedConflict = conflicts.find((c) => c.id === selectedId) ?? null;
 
@@ -651,14 +689,14 @@ export default function AdminConflictsPage() {
     const matchSearch =
       !searchQuery ||
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.referenceId ?? "").toLowerCase().includes(searchQuery.toLowerCase());
+      c.reference_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.reference_id ?? "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchStatus = filterStatus === "all" || c.status === filterStatus;
     const matchPriority = filterPriority === "all" || c.priority === filterPriority;
     const matchAgent =
       filterAgent === "all" ||
-      (filterAgent === "unassigned" ? !c.assignedAgent : c.assignedAgent === filterAgent);
+      (filterAgent === "unassigned" ? !c.assigned_agent_name : c.assigned_agent_name === filterAgent);
     return matchSearch && matchStatus && matchPriority && matchAgent;
   });
 
@@ -668,74 +706,20 @@ export default function AdminConflictsPage() {
       c.status === "escalated" ? 0 : c.priority === "urgent" ? 1 : c.priority === "high" ? 2 : 3;
     const diff = urgencyScore(a) - urgencyScore(b);
     if (diff !== 0) return diff;
-    return new Date(a.slaDeadline ?? "9999").getTime() - new Date(b.slaDeadline ?? "9999").getTime();
+    return new Date(a.sla_deadline ?? "9999").getTime() - new Date(b.sla_deadline ?? "9999").getTime();
   });
 
-  // ── Mutations ──
-
-  const updateConflict = (id: string, patch: Partial<ConflictReport>) =>
-    setConflicts((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch, updatedAt: new Date().toISOString() } : c)));
-
-  const appendTimeline = (id: string, event: Omit<TimelineEvent, "id">) =>
-    setConflicts((prev) =>
-      prev.map((c) =>
-        c.id !== id ? c : { ...c, updatedAt: new Date().toISOString(), timeline: [...c.timeline, { id: `t${Date.now()}`, ...event }] }
-      )
+  if (!isAuthenticated || (user?.role !== "admin" && user?.role !== "agent")) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-sm p-8 max-w-md text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+          <p className="text-gray-600">You need admin or agent privileges to view this page.</p>
+        </div>
+      </div>
     );
-
-  const onStatusChange = (id: string, status: Status) => {
-    // TODO: PATCH /api/admin/conflicts/:id { status }
-    updateConflict(id, { status });
-    appendTimeline(id, {
-      timestamp: new Date().toISOString(), actor: "agent", actorName: "You (Admin)",
-      type: "status_change", content: `Status changed to ${status}.`,
-    });
-  };
-
-  const onAssignAgent = (id: string, agent: string) => {
-    // TODO: PATCH /api/admin/conflicts/:id { assignedAgent: agent }
-    updateConflict(id, { assignedAgent: agent });
-    appendTimeline(id, {
-      timestamp: new Date().toISOString(), actor: "system", actorName: "System",
-      type: "agent_assigned", content: `Case assigned to ${agent}.`,
-    });
-  };
-
-  const onPostMessage = (id: string, text: string, files: Attachment[]) => {
-    // TODO: POST /api/admin/conflicts/:id/messages { text, attachments }
-    const conflict = conflicts.find((c) => c.id === id);
-    if (!conflict) return;
-    appendTimeline(id, {
-      timestamp: new Date().toISOString(), actor: "agent",
-      actorName: conflict.assignedAgent ?? "Agent",
-      type: files.length > 0 ? "attachment" : "message",
-      content: text || `Attached ${files.length} file(s).`,
-      attachments: files,
-    });
-    if (files.length > 0) {
-      updateConflict(id, { attachments: [...conflict.attachments, ...files] });
-    }
-  };
-
-  const onProposeResolution = (id: string, text: string) => {
-    // TODO: POST /api/admin/conflicts/:id/resolution { text }
-    updateConflict(id, { resolution: text, resolutionStatus: "pending_acceptance" });
-    appendTimeline(id, {
-      timestamp: new Date().toISOString(), actor: "agent",
-      actorName: conflicts.find((c) => c.id === id)?.assignedAgent ?? "Agent",
-      type: "resolution_proposed", content: `Resolution proposed: ${text}`,
-    });
-  };
-
-  const onSlaOverride = (id: string, hours: number) => {
-    // TODO: PATCH /api/admin/conflicts/:id { slaDeadline }
-    const newDeadline = new Date(Date.now() + hours * 3600000).toISOString();
-    updateConflict(id, { slaDeadline: newDeadline });
-    appendTimeline(id, {
-      timestamp: new Date().toISOString(), actor: "agent", actorName: "You (Admin)",
-      type: "sla_override", content: `SLA deadline extended by ${hours} hours.`,
-    });
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -743,11 +727,7 @@ export default function AdminConflictsPage() {
         <AdminDetailPanel
           conflict={selectedConflict}
           onClose={() => setSelectedId(null)}
-          onStatusChange={onStatusChange}
-          onAssignAgent={onAssignAgent}
-          onPostMessage={onPostMessage}
-          onProposeResolution={onProposeResolution}
-          onSlaOverride={onSlaOverride}
+          onRefresh={fetchConflicts}
         />
       )}
 
@@ -759,6 +739,10 @@ export default function AdminConflictsPage() {
             <p className="text-gray-500 mt-1">Admin · Resolution Hub</p>
           </div>
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={fetchConflicts} disabled={loading} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
             <div className="flex items-center gap-2 text-sm text-gray-500 bg-white border rounded-lg px-3 py-2">
               <div className="w-2 h-2 rounded-full bg-green-500" />
               Live · auto-refresh every 30s
@@ -832,7 +816,17 @@ export default function AdminConflictsPage() {
         {/* Triage table */}
         <Card>
           <CardContent className="p-0">
-            {sorted.length === 0 ? (
+            {loading && conflicts.length === 0 ? (
+              <div className="text-center py-16 text-gray-500">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                <p>Loading conflicts...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-16 text-gray-500">
+                <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-400" />
+                <p>{error}</p>
+              </div>
+            ) : sorted.length === 0 ? (
               <div className="text-center py-16 text-gray-500">
                 <Inbox className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p>No conflicts match your filters.</p>
@@ -840,8 +834,8 @@ export default function AdminConflictsPage() {
             ) : (
               <div className="divide-y">
                 {sorted.map((conflict) => {
-                  const slaInfo = conflict.slaDeadline && conflict.status !== "resolved"
-                    ? getTimeRemaining(conflict.slaDeadline)
+                  const slaInfo = conflict.sla_deadline && conflict.status !== "resolved"
+                    ? getTimeRemaining(conflict.sla_deadline)
                     : null;
 
                   return (
@@ -866,9 +860,9 @@ export default function AdminConflictsPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <h3 className="font-semibold text-sm">{conflict.title}</h3>
-                                <span className="text-xs text-gray-400 font-mono">{conflict.id}</span>
-                                {conflict.referenceId && (
-                                  <span className="text-xs text-blue-500 font-mono">{conflict.referenceId}</span>
+                                <span className="text-xs text-gray-400 font-mono">{conflict.reference_number}</span>
+                                {conflict.reference_id && (
+                                  <span className="text-xs text-blue-500 font-mono">{conflict.reference_id}</span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{conflict.description}</p>
@@ -888,14 +882,14 @@ export default function AdminConflictsPage() {
                             {/* Customer */}
                             <div className="flex items-center gap-1.5">
                               <User className="h-3 w-3" />
-                              <span>{conflict.customerName}</span>
+                              <span>{conflict.customer_name}</span>
                             </div>
 
                             {/* Agent */}
-                            {conflict.assignedAgent ? (
+                            {conflict.assigned_agent_name ? (
                               <div className="flex items-center gap-1.5">
-                                <AgentAvatar name={conflict.assignedAgent} size="sm" />
-                                <span>{conflict.assignedAgent}</span>
+                                <AgentAvatar name={conflict.assigned_agent_name} size="sm" />
+                                <span>{conflict.assigned_agent_name}</span>
                               </div>
                             ) : (
                               <span className="text-orange-500 font-medium">⚠ Unassigned</span>
@@ -916,15 +910,15 @@ export default function AdminConflictsPage() {
                             )}
 
                             {/* Satisfaction */}
-                            {conflict.satisfactionRating && (
+                            {conflict.satisfaction_rating && (
                               <span className="flex items-center gap-1">
                                 <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                                {conflict.satisfactionRating}/5
+                                {conflict.satisfaction_rating}/5
                               </span>
                             )}
 
                             <span className="ml-auto">
-                              Updated {new Date(conflict.updatedAt).toLocaleDateString()}
+                              Updated {new Date(conflict.updated_at).toLocaleDateString()}
                             </span>
                           </div>
                         </div>

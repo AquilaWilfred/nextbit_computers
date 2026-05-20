@@ -5,7 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import select as sa_select
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Sequence
 from db.postgres import get_db
 from models.auth import User
 from models.b2b import B2BApplication
@@ -73,6 +73,14 @@ async def get_current_user_optional(
         return None
     
     return db.query(User).filter(User.email == email).first()
+
+
+def require_role(roles: Sequence[str]):
+    async def verify_role(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in roles:
+            raise HTTPException(status_code=403, detail="Access denied")
+        return current_user
+    return verify_role
 
 
 @router.post("/login", response_model=TokenResponse)
