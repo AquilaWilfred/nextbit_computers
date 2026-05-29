@@ -1,5 +1,5 @@
 use axum::{extract::Path, Json};
-use crate::models::probe::{Scan, Device};
+use crate::models::probe::Scan;
 use crate::state::AppState;
 use axum::extract::State;
 use std::sync::Arc;

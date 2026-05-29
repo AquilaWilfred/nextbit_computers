@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { toggleCompare, getCompareList } from "@/lib/ux";
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,7 @@ interface Product {
   featured?: boolean | null;
   shortDescription?: string | null;
   tags?: unknown;
+  isTradeInListing?: boolean;
 }
 
 interface ProductCardProps {
@@ -47,7 +49,7 @@ function notifyWishlistListeners() {
   _wishlistListeners.forEach((fn) => fn());
 }
 
-function useWishlist(productId: number, isAuthenticated: boolean) {
+function useWishlist(productId: number, isAuthenticated: boolean, disabled = false) {
   const [isWishlisted, setIsWishlisted] = useState(
     () => !!_wishlistCache?.includes(productId)
   );
@@ -65,7 +67,7 @@ function useWishlist(productId: number, isAuthenticated: boolean) {
 
   // Fetch on mount if authenticated and cache is cold
   useEffect(() => {
-    if (!isAuthenticated || _wishlistCache !== null) return;
+    if (disabled || !isAuthenticated || _wishlistCache !== null) return;
     fetch("/api/wishlist", { credentials: 'include' })
       .then((r) => r.json())
       .then((data: { productId: number }[]) => {
@@ -77,7 +79,7 @@ function useWishlist(productId: number, isAuthenticated: boolean) {
   }, [isAuthenticated, productId]);
 
   const toggle = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (disabled || !isAuthenticated) return;
     try {
       const res = await fetch("/api/wishlist/toggle", {
         method: "POST",
@@ -156,10 +158,12 @@ function prefetchProduct(slug: string) {
 // ---------------------------------------------------------------------------
 
 export default function ProductCard({ product, onCartUpdate }: ProductCardProps) {
+  const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { isWishlisted, toggle: toggleWishlist } = useWishlist(
     product.id,
-    isAuthenticated
+    isAuthenticated,
+    !!product.isTradeInListing
   );
   const { upsert: upsertCart, isPending: cartPending } = useCartUpsert(onCartUpdate);
 
@@ -172,9 +176,21 @@ export default function ProductCard({ product, onCartUpdate }: ProductCardProps)
     return () => window.removeEventListener("compareUpdated", check);
   }, [product.id]);
 
-  const images = (product.images as string[]) ?? [];
+  const images = Array.isArray(product.images)
+    ? product.images
+        .map((img) =>
+          typeof img === "string"
+            ? img
+            : img && typeof img === "object"
+            ? (img.url || img.src || "")
+            : ""
+        )
+        .filter(Boolean)
+    : [];
   const image = images[0] ?? "/assets/placeholder.png";
-  const tags = (Array.isArray(product.tags) ? product.tags : []) as string[];
+  const tags = Array.isArray(product.tags)
+    ? product.tags.map((tag) => String(tag))
+    : [];
   const comparePrice = product.comparePrice ?? 0;
   const price = product.price;
   const discount =
@@ -184,6 +200,7 @@ export default function ProductCard({ product, onCartUpdate }: ProductCardProps)
     e.preventDefault();
     e.stopPropagation();
     if (product.stock === 0) return;
+
     if (isAuthenticated) {
       upsertCart(product.id, 1);
     } else {
@@ -195,11 +212,13 @@ export default function ProductCard({ product, onCartUpdate }: ProductCardProps)
   };
 
   return (
-    <Link href={`/products/${product.slug}`}>
+    <Link href={product.isTradeInListing ? "/listings" : `/products/${product.slug}`}>
       <div
         className="group bg-card border border-border rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 hover:border-[var(--brand)]/40 transition-all duration-300 cursor-pointer h-full flex flex-col"
         style={{ contentVisibility: "auto", containIntrinsicSize: "0 400px" }}
-        onMouseEnter={() => prefetchProduct(product.slug)}
+        onMouseEnter={() => {
+          if (!product.isTradeInListing) prefetchProduct(product.slug);
+        }}
       >
         {/* Image */}
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
@@ -216,6 +235,11 @@ export default function ProductCard({ product, onCartUpdate }: ProductCardProps)
             {product.featured && (
               <Badge className="bg-[var(--brand)] text-white text-[10px] px-1.5 py-0.5 gap-0.5">
                 <Zap className="w-2.5 h-2.5" /> Featured
+              </Badge>
+            )}
+            {product.isTradeInListing && (
+              <Badge className="bg-secondary text-secondary-foreground text-[10px] px-1.5 py-0.5">
+                Trade-In
               </Badge>
             )}
             {discount > 0 && (

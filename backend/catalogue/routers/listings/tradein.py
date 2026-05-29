@@ -10,7 +10,7 @@ from db.postgres import get_db
 from routers.auth import get_current_user
 from models.auth import User
 from models.listings.tradein import (
-    TradeInListing, TradeInStats, ListingStatus, DeviceType, DeviceCondition
+    TradeInListing, TradeInStats, TradeInOffer, ListingStatus, DeviceType, DeviceCondition
 )
 from schemas.listings.tradein import (
     TradeInListingUpdate, TradeInListingResponse,
@@ -175,20 +175,23 @@ def delete_listing(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a trade-in listing (only if pending)"""
+    """Delete a trade-in listing.
+
+    - Always fully remove the listing from the database when the user drops it.
+    - Remove any related offers first to avoid foreign-key conflicts.
+    """
     listing = db.query(TradeInListing).filter(TradeInListing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
-    if listing.user_id != current_user.id:
+    if listing.user_id != current_user.id and current_user.role not in ["admin", "agent"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    if listing.status != ListingStatus.PENDING_VERIFICATION:
-        raise HTTPException(status_code=400, detail="Can only delete pending listings")
-    
-    db.delete(listing)
+
+    # Remove any dependent offers before deleting the listing.
+    db.query(TradeInOffer).filter(TradeInOffer.listing_id == listing.id).delete(synchronize_session=False)
     update_user_stats(db, current_user.id, listing, is_delete=True)
+    db.delete(listing)
     db.commit()
-    
-    return {"success": True}
+    return {"success": True, "deleted": True}
 
 
 @router.get("/stats", response_model=UserTradeInStatsResponse)

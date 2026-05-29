@@ -18,7 +18,7 @@ use tracing::info;
 use hyper::header::{HeaderValue, AUTHORIZATION, CONTENT_TYPE, ACCEPT, COOKIE};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use handlers::{alerts, assets, auth as auth_handlers, debug, device, health, probe, proxy, scan, version, ws, ws_technician};
+use handlers::{alerts, assets, auth as auth_handlers, escrow as escrow_handlers, debug, device, health, probe, proxy, scan, version, ws, ws_technician};
 use redis_helpers::with_redis;
 use state::AppState;
 
@@ -40,8 +40,9 @@ async fn main() -> Result<()> {
 
     info!("NextBit Gateway starting...");
 
-    let ml = reqwest::Client::new();
-    info!("ML client ready");
+    let http_client = reqwest::Client::new();
+    let ml = http_client.clone();
+    info!("HTTP client ready");
 
     let pg = PgPool::connect(&std::env::var("DATABASE_URL").expect("DATABASE_URL not set")).await?;
     info!("Postgres connected");
@@ -65,18 +66,38 @@ async fn main() -> Result<()> {
     let ml_url = std::env::var("ML_URL")
         .unwrap_or_else(|_| "http://localhost:8000".to_string());
 
+    let flw_client_id     = std::env::var("FLW_CLIENT_ID").expect("FLW_CLIENT_ID not set");
+    let flw_client_secret = std::env::var("FLW_CLIENT_SECRET").expect("FLW_CLIENT_SECRET not set");
+    let flw_token_url     = std::env::var("FLW_TOKEN_URL")
+        .unwrap_or_else(|_| "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token".to_string());
+    let flw_api_base      = std::env::var("FLW_API_BASE")
+        .unwrap_or_else(|_| "https://api.flutterwave.com".to_string());
+    let flw_webhook_secret = std::env::var("FLW_WEBHOOK_SECRET")
+        .unwrap_or_else(|_| "nextbit_webhook_2026".to_string());
+
+    let flutterwave = crate::services::flutterwave::FlutterwaveClient::new(
+        http_client.clone(),
+        flw_client_id,
+        flw_client_secret,
+        flw_token_url,
+        flw_api_base,
+        flw_webhook_secret,
+    );
+
     let internal_api_key = std::env::var("INTERNAL_API_KEY")
         .unwrap_or_else(|_| "nextbit_internal_secret_2026".to_string());
-    let state = Arc::new(AppState { pg, mongo, redis, ml, catalogue_url, ml_url, internal_api_key });
 
+    let state = Arc::new(AppState { pg, mongo, redis, ml, http_client, flutterwave, catalogue_url, ml_url, internal_api_key });
+
+    
     // ── Public routes (no auth required) ─────────────────────────────
-    let public = Router::new()
+    let public = Router::<Arc<AppState>>::new()
         .route("/health",                get(health::health_handler))
         .route("/api/auth",              any(proxy::proxy_catalogue))
         .route("/api/auth/*path",        any(proxy::proxy_catalogue))
-        .route("/api/auth/login",        post(auth_handlers::login))
-        .route("/api/auth/logout",       post(auth_handlers::logout))
-        .route("/api/auth/register",     post(auth_handlers::register))
+        .route("/api/auth/login",        any(proxy::proxy_catalogue))
+        .route("/api/auth/logout",       any(proxy::proxy_catalogue))
+        .route("/api/auth/register",     any(proxy::proxy_catalogue))
         .route("/api/products",          any(proxy::proxy_catalogue))
         .route("/api/products/*path",    any(proxy::proxy_catalogue))
         .route("/api/categories",        any(proxy::proxy_catalogue))
@@ -94,10 +115,11 @@ async fn main() -> Result<()> {
         .route("/api/devices",           get(device::get_all_devices))
         .route("/api/devices/:id",       get(device::get_device))
         .route("/api/devices/:id/scans", get(scan::get_device_scans))
-        .route("/api/devices/:id/scans/:sid", get(scan::get_scan));
+        .route("/api/devices/:id/scans/:sid", get(scan::get_scan))
+        .route("/api/webhooks/flutterwave", post(escrow_handlers::flutterwave_webhook));
 
     // ── Protected routes (JWT required) ──────────────────────────────
-    let protected = Router::new()
+    let protected = Router::<Arc<AppState>>::new()
         .route("/api/auth/me",                           get(proxy::proxy_catalogue))
         .route("/api/orders",                            any(proxy::proxy_catalogue))
         .route("/api/orders/*path",                      any(proxy::proxy_catalogue))
@@ -129,6 +151,12 @@ async fn main() -> Result<()> {
         .route("/api/assets/{device_id}/report",         get(assets::get_full_report))
         .route("/api/ml/forecast",                       post(proxy::ml_forecast))
         .route("/api/ml/hardware",                       post(proxy::ml_hardware))
+        .route("/api/escrow",                            post(escrow_handlers::create_escrow))
+        .route("/api/escrow/:id",                        get(escrow_handlers::get_escrow))
+        .route("/api/escrow/:id/initiate-payment", post(escrow_handlers::initiate_payment))
+        .route("/api/escrow/:id/confirm-delivery",       post(escrow_handlers::confirm_delivery))
+        .route("/api/escrow/:id/dispute",                post(escrow_handlers::raise_dispute))
+        .route("/api/escrow/:id/admin-ruling",           post(escrow_handlers::admin_ruling))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             middleware::auth::require_auth,

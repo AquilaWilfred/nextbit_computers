@@ -37,7 +37,7 @@ export const ADMIN_NAV_ITEMS = [
   { key: "e-waste", label: "E-Waste & Trade-In", href: "/admin/e-waste", icon: Recycle },
   { key: "insurance", label: "Insurance", href: "/admin/insurance", icon: Shield },
   { key: "vip", label: "VIP Services", href: "/admin/vip", icon: Crown },
-  { key: "financial-suite", label: "Financial Suite", href: "/admin/financial-suite", icon: Wallet },
+  { key: "nextbit-wallet", label: "nextbit-wallete", href: "/admin/nextbit-wallet", icon: Wallet },
   { key: "payments", label: "Payments", href: "/admin/payments", icon: CreditCard },
   { key: "analytics", label: "Analytics", href: "/admin/analytics", icon: TrendingUp },
   { key: "drivers", label: "Drivers", href: "/admin/drivers", icon: Truck },

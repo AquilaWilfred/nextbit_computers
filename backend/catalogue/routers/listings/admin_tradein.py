@@ -131,6 +131,7 @@ def get_all_listings(
             status=listing.status,
             views=listing.views,
             credit_issued_kes=listing.credit_issued_kes,
+            visible=listing.visible,
             created_at=listing.created_at,
             sold_at=listing.sold_at,
             user_id=listing.user_id,

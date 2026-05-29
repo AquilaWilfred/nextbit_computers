@@ -40,6 +40,7 @@ class TradeInListingCreate(BaseModel):
     images: List[str] = []
     location: Optional[str] = None
     drop_branch: str = Field(min_length=1)
+    visible: bool = True
 
 
 class TradeInListingUpdate(BaseModel):
@@ -48,6 +49,7 @@ class TradeInListingUpdate(BaseModel):
     images: Optional[List[str]] = None
     location: Optional[str] = None
     drop_branch: Optional[str] = None
+    visible: Optional[bool] = None
 
 
 class TradeInListingResponse(BaseModel):
@@ -69,6 +71,7 @@ class TradeInListingResponse(BaseModel):
     credit_issued_kes: Optional[int] = None
     created_at: datetime
     sold_at: Optional[datetime] = None
+    visible: bool
 
     class Config:
         from_attributes = True

@@ -244,6 +244,12 @@ export default function DriverDashboard() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isDriverAuth) {
+      setAiChatOpen(false);
+    }
+  }, [isDriverAuth]);
+
   const { deliveries, isLoading } = useDeliveries(driverInfo?.id ?? null, isDriverAuth);
   const { profile: driverProfile, refetch: refetchProfile } = useDriverProfile(
     driverInfo?.id ?? null,
@@ -369,6 +375,14 @@ export default function DriverDashboard() {
     wsRef.current?.close();
     toast.success("Signed out of driver portal");
     window.dispatchEvent(new Event("driverAuthChanged"));
+  };
+
+  const handleAiToggle = () => {
+    if (!isDriverAuth) {
+      toast.error("Driver login is required to open the AI assistant.");
+      return;
+    }
+    setAiChatOpen((prev) => !prev);
   };
 
   // Google Maps directions
@@ -873,7 +887,14 @@ export default function DriverDashboard() {
             </div>
 
             <div className="flex items-center gap-2 z-10">
-              <Button variant="ghost" size="icon" onClick={() => setAiChatOpen(!aiChatOpen)} aria-label="Toggle AI Assistant">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleAiToggle}
+                disabled={!isDriverAuth}
+                title={isDriverAuth ? "Toggle AI Assistant" : "Driver login is required to use AI"}
+                aria-label="Toggle AI Assistant"
+              >
                 <Sparkles className="w-4 h-4 text-[var(--brand)]" />
               </Button>
               {isAuthenticated && (
@@ -934,7 +955,7 @@ export default function DriverDashboard() {
       </footer>
 
       {/* Floating AI Chat */}
-      {aiChatOpen && (
+      {aiChatOpen && isDriverAuth && (
         <div
           className="fixed bottom-6 right-6 z-[100]"
           style={{

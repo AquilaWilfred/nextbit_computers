@@ -37,6 +37,7 @@ interface Product {
   brand?: string | null;
   categoryId?: number;
   stock: number;
+  isTradeInListing?: boolean;
 }
 
 interface Category {
@@ -62,6 +63,7 @@ interface PublicSettings {
 interface ProductPage {
   items: Product[];
   nextCursor: number | null;
+  total?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ function buildProductQueryString(params: {
   minPrice?: string;
   maxPrice?: string;
   sortBy?: SortBy;
+  includeListings?: boolean;
 }): string {
   const q = new URLSearchParams();
   if (params.limit) q.set("limit", String(params.limit));
@@ -95,6 +98,7 @@ function buildProductQueryString(params: {
   if (params.minPrice) q.set("minPrice", params.minPrice);
   if (params.maxPrice) q.set("maxPrice", params.maxPrice);
   if (params.sortBy && params.sortBy !== "newest") q.set("sortBy", params.sortBy);
+  if (params.includeListings) q.set('includeListings', 'true');
   return q.toString();
 }
 
@@ -156,6 +160,7 @@ export default function Products() {
 
   // Infinite product pages
   const [pages, setPages] = useState<ProductPage[]>([]);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingNext, setIsFetchingNext] = useState(false);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
@@ -190,15 +195,62 @@ export default function Products() {
 
   // ── Static data fetch (once) ───────────────────────────────────────────────
   useEffect(() => {
-    Promise.all([
-      fetch("/api/categories").then((r) => r.json()),
-      fetch("/api/settings/public?keys=brands,general").then((r) => r.json()),
-      fetch("/api/products/facets").then((r) => r.json()),
-    ]).then(([cats, s, f]) => {
-      setCategories(Array.isArray(cats) ? cats : []);
-      setSettings(s);
-      setFacets(f ?? { categories: {}, brands: {} });
-    }).catch((e) => console.error("Static fetch failed:", e));
+    (async () => {
+      try {
+        const results = await Promise.allSettled([
+          fetch("/api/categories"),
+          fetch("/api/settings/public?keys=brands,general"),
+          fetch("/api/products/facets"),
+        ]);
+
+        // categories
+        if (results[0].status === "fulfilled") {
+          try {
+            const cats = await results[0].value.json();
+            setCategories(Array.isArray(cats) ? cats : []);
+          } catch (err) {
+            console.error("Failed to parse /api/categories response:", err);
+            setCategories([]);
+          }
+        } else {
+          console.error("Failed to fetch /api/categories:", results[0].reason);
+          setCategories([]);
+        }
+
+        // settings
+        if (results[1].status === "fulfilled") {
+          try {
+            const s = await results[1].value.json();
+            setSettings(s || {});
+          } catch (err) {
+            console.error("Failed to parse /api/settings/public response:", err);
+            setSettings({});
+          }
+        } else {
+          console.error("Failed to fetch /api/settings/public:", results[1].reason);
+          setSettings({});
+        }
+
+        // facets
+        if (results[2].status === "fulfilled") {
+          try {
+            const f = await results[2].value.json();
+            setFacets(f ?? { categories: {}, brands: {} });
+          } catch (err) {
+            console.error("Failed to parse /api/products/facets response:", err);
+            setFacets({ categories: {}, brands: {} });
+          }
+        } else {
+          console.error("Failed to fetch /api/products/facets:", results[2].reason);
+          setFacets({ categories: {}, brands: {} });
+        }
+      } catch (e) {
+        console.error("Static fetch failed:", e);
+        setCategories([]);
+        setSettings({});
+        setFacets({ categories: {}, brands: {} });
+      }
+    })();
   }, []);
 
   // ── URL → State sync ───────────────────────────────────────────────────────
@@ -320,13 +372,16 @@ export default function Products() {
         minPrice: debouncedMinPrice || undefined,
         maxPrice: debouncedMaxPrice || undefined,
         sortBy,
+        includeListings: true,
       });
-      const res = await fetch(`/api/products?${qs}`, { signal });
+      const res = await fetch(`/api/products/infinite?${qs}`, { signal });
       if (!res.ok) throw new Error("Failed to fetch products");
       const json = await res.json();
-      return (Array.isArray(json)
-        ? { items: json, nextCursor: null }
-        : json) as ProductPage;
+      // API returns either { items, nextCursor, total } or an array
+      if (Array.isArray(json)) {
+        return { items: json, nextCursor: null } as ProductPage;
+      }
+      return json as ProductPage;
     },
     [
       debouncedSearch,
@@ -354,6 +409,7 @@ export default function Products() {
       .then((data) => {
         setPages([data]);
         setNextCursor(data.nextCursor);
+        if (typeof data.total === "number") setTotalCount(data.total);
       })
       .catch((err) => {
         if (err.name !== "AbortError") console.error(err);
@@ -380,6 +436,7 @@ export default function Products() {
             .then((data) => {
               setPages((prev) => [...prev, data]);
               setNextCursor(data.nextCursor);
+              if (typeof data.total === "number") setTotalCount(data.total);
             })
             .catch((err) => {
               if (err.name !== "AbortError") console.error(err);
@@ -449,13 +506,17 @@ export default function Products() {
     [pages]
   );
 
-  const availableBrands: string[] = settings?.brands || [
-    "Samsung",
-    "Dell",
-    "HP",
-    "Lenovo",
-    "Asus",
-  ];
+  // Combine configured brands (settings) with brands seen in product facets
+  const availableBrands: string[] = useMemo(() => {
+    const fromSettings = Array.isArray(settings?.brands) ? settings!.brands : [];
+    const fromFacets = facets && facets.brands ? Object.keys(facets.brands) : [];
+    const merged = Array.from(new Set([...fromSettings, ...fromFacets]));
+    // sort for stable display: put settings first (in order), then facet-only brands alphabetically
+    const settingsSet = new Set(fromSettings.map((b) => b.toLowerCase()));
+    const settingsOrdered = merged.filter((b) => settingsSet.has(b.toLowerCase()));
+    const facetOnly = merged.filter((b) => !settingsSet.has(b.toLowerCase())).sort((a, z) => a.localeCompare(z));
+    return [...settingsOrdered, ...facetOnly];
+  }, [settings, facets]);
   const currency = settings?.general?.currency || "$";
 
   type ActiveFilter = { id: string; label: string; onRemove: () => void };
@@ -519,7 +580,7 @@ export default function Products() {
             <div>
               <h1 className="font-display text-2xl font-bold">{pageHeading}</h1>
               <p className="text-sm text-muted-foreground mt-0.5" aria-live="polite">
-                {sorted.length} product{sorted.length !== 1 ? "s" : ""} found
+                {(totalCount ?? sorted.length)} product{(totalCount ?? sorted.length) !== 1 ? "s" : ""} found
               </p>
             </div>
             <div className="flex items-center gap-2">

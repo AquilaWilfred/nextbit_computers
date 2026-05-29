@@ -140,6 +140,36 @@ function StatCard({ icon, label, value, sub, accent }: {
   );
 }
 
+function _parseImages(raw: any): string[] {
+  try {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      const out: string[] = [];
+      for (const item of raw) {
+        if (!item) continue;
+        if (typeof item === "string") out.push(item);
+        else if (typeof item === "object") {
+          const url = item.url || item.src || item.path || item.filename;
+          if (typeof url === "string" && url) out.push(url);
+        }
+      }
+      return out;
+    }
+    if (typeof raw === "string") {
+      // maybe a JSON string
+      try {
+        const parsed = JSON.parse(raw);
+        return _parseImages(parsed as any);
+      } catch (e) {
+        return [];
+      }
+    }
+  } catch (e) {
+    return [];
+  }
+  return [];
+}
+
 function StatusBadge({ status }: { status: Status }) {
   const m = STATUS_META[status];
   return (
@@ -236,7 +266,7 @@ function DetailModal({
             background: "#f9fafb", border: "1px solid #e5e7eb",
           }}>
             <img
-              src={item.images?.[0] || "https://placehold.co/600x400/2563EB/white?text=Device"}
+              src={_parseImages(item.images)[0] || "https://placehold.co/600x400/2563EB/white?text=Device"}
               alt={item.model}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
@@ -410,42 +440,6 @@ export default function TradeInAdminPage() {
 
   return (
     <div style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif", background: "#f8fafc", minHeight: "100vh" }}>
-      {/* Top Nav */}
-      <div style={{
-        background: "#0f172a", color: "#fff",
-        padding: "0 32px", height: 56,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        position: "sticky", top: 0, zIndex: 50,
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 30, height: 30, background: "#2563eb",
-            borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 16, fontWeight: 900, letterSpacing: -1,
-          }}>N</div>
-          <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.02em" }}>NextBit Admin</span>
-          <span style={{
-            background: "rgba(255,255,255,0.07)", color: "#94a3b8",
-            fontSize: 11, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
-          }}>Trade-In Dashboard</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {stats && stats.pending_listings > 0 && (
-            <div style={{
-              background: "#f59e0b", color: "#fff",
-              borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 700,
-            }}>
-              ⚠ {stats.pending_listings} Pending
-            </div>
-          )}
-          <div style={{
-            width: 32, height: 32, background: "#1e293b",
-            borderRadius: "50%", display: "flex", alignItems: "center",
-            justifyContent: "center", fontSize: 14, color: "#94a3b8",
-          }}>👤</div>
-        </div>
-      </div>
 
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 24px" }}>
 
@@ -613,7 +607,7 @@ export default function TradeInAdminPage() {
                 {/* Thumbnail */}
                 <div style={{ width: 40, height: 40, borderRadius: 8, overflow: "hidden", background: "#f3f4f6" }}>
                   <img
-                    src={item.images?.[0] || "https://placehold.co/80x80/2563EB/white?text=D"}
+                    src={_parseImages(item.images)[0] || "https://placehold.co/80x80/2563EB/white?text=D"}
                     alt={item.model}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />

@@ -798,7 +798,7 @@ export default function Navbar() {
                     { href: "/e-waste", label: "E-Waste & Trade-In", icon: <Recycle className="w-4 h-4" /> },
                     { href: "/listings", label: "Listings", icon: <List className="w-4 h-4" /> },
                     { href: "/insurance", label: "Insurance", icon: <Shield className="w-4 h-4" /> },
-                    { href: "/financial-suite", label: "Financial Suite", icon: <CreditCard className="w-4 h-4" /> },
+                    { href: "/nextbit-wallet", label: "NextBit Wallet", icon: <CreditCard className="w-4 h-4" /> },
                     { href: "/vip", label: "VIP Services", icon: <Crown className="w-4 h-4" /> },
                     { href: "/conflicts", label: "Resolution Hub", icon: <Headphones className="w-4 h-4" /> },
                   ].map(({ href, label, icon }) => (
@@ -966,9 +966,9 @@ export default function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/financial-suite" className="flex items-center gap-2 cursor-pointer">
+                    <Link href="/nextbit-wallet" className="flex items-center gap-2 cursor-pointer">
                       <CreditCard className="w-4 h-4" />
-                      Financial Suite
+                      NextBit Wallet
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

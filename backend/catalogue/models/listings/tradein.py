@@ -81,6 +81,8 @@ class TradeInListing(Base):
     status = Column(Enum(ListingStatus), default=ListingStatus.PENDING_VERIFICATION)
     views = Column(Integer, default=0)
     credit_issued_kes = Column(Integer, nullable=True)
+    # Visibility (can be hidden from marketplace)
+    visible = Column(Boolean, default=True)
     
     # Admin review
     reviewed_by = Column(String(255), nullable=True)

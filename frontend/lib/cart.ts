@@ -11,6 +11,7 @@ export interface GuestCartItem {
   image?: string;
   slug?: string;
   stock?: number;
+  brand?: string | null;
 }
 
 export function getGuestCart(): GuestCartItem[] {
@@ -45,6 +46,7 @@ export function addToGuestCart(product: any, quantity: number = 1): void {
       image: (product.images as string[])?.[0],
       slug: product.slug,
       stock: product.stock,
+      brand: product.brand ?? null,
     });
   }
   setGuestCart(cart);

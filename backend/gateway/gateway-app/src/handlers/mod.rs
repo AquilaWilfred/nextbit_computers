@@ -1,6 +1,7 @@
 pub mod alerts;
 pub mod assets;
 pub mod auth;
+pub mod escrow;
 pub mod debug;
 pub mod device;
 pub mod health;

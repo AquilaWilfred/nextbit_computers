@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 from db.postgres import get_db
 from models.order import CartItem
 from models.auth import User
+from models.listings.tradein import TradeInListing
 from routers.auth import get_current_user
 
+LISTING_PRODUCT_ID_OFFSET = 1000000000
 router = APIRouter()
 
 class CartItemRequest(BaseModel):
@@ -24,23 +26,64 @@ class CartItemResponse(BaseModel):
     product_stock: int
     product_brand: str | None
 
+def _resolve_listing_cart_item(db: Session, listing_id: int) -> dict:
+    listing = db.query(TradeInListing).filter(TradeInListing.id == listing_id).first()
+    if not listing:
+        return {
+            "product_name": "Unknown listing",
+            "product_price": 0.0,
+            "product_images": [],
+            "product_slug": "",
+            "product_stock": 0,
+            "product_brand": None,
+        }
+
+    return {
+        "product_name": f"{listing.brand} {listing.model} (Used)",
+        "product_price": float(listing.asking_price_kes),
+        "product_images": listing.images if listing.images else [],
+        "product_slug": f"listing-{listing.id}",
+        "product_stock": 1,
+        "product_brand": listing.brand,
+    }
+
 @router.get("", response_model=List[CartItemResponse])
 @router.get("/", response_model=List[CartItemResponse])
 async def get_cart(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     items = db.query(CartItem).filter(CartItem.user_id == current_user.id).all()
-    return [
-        CartItemResponse(
-            id=i.id,
-            product_id=i.product_id,
-            quantity=i.quantity,
-            product_name=i.product.name if i.product else "Unknown",
-            product_price=float(i.product.price) if i.product else 0,
-            product_images=i.product.images if i.product and i.product.images else [],
-            product_slug=i.product.slug if i.product else "",
-            product_stock=getattr(i.product, "stock_quantity", 0) if i.product else 0,
-            product_brand=i.product.brand if i.product else None,
-        ) for i in items
-    ]
+    result = []
+    for i in items:
+        if i.product is None and i.product_id >= LISTING_PRODUCT_ID_OFFSET:
+            listing_id = i.product_id - LISTING_PRODUCT_ID_OFFSET
+            listing_data = _resolve_listing_cart_item(db, listing_id)
+            result.append(
+                CartItemResponse(
+                    id=i.id,
+                    product_id=i.product_id,
+                    quantity=i.quantity,
+                    product_name=listing_data["product_name"],
+                    product_price=listing_data["product_price"],
+                    product_images=listing_data["product_images"],
+                    product_slug=listing_data["product_slug"],
+                    product_stock=listing_data["product_stock"],
+                    product_brand=listing_data["product_brand"],
+                )
+            )
+        else:
+            result.append(
+                CartItemResponse(
+                    id=i.id,
+                    product_id=i.product_id,
+                    quantity=i.quantity,
+                    product_name=i.product.name if i.product else "Unknown",
+                    product_price=float(i.product.price) if i.product else 0,
+                    product_images=i.product.images if i.product and i.product.images else [],
+                    product_slug=i.product.slug if i.product else "",
+                    product_stock=getattr(i.product, "stock_quantity", 0) if i.product else 0,
+                    product_brand=i.product.brand if i.product else None,
+                )
+            )
+    return result
 
 @router.post("/items")
 async def add_to_cart(item: CartItemRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
