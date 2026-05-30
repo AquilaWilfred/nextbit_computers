@@ -6,6 +6,8 @@ mod redis_helpers;
 mod services;
 mod state;
 mod routes;
+mod daraja;
+mod daraja_escrow;
 
 use anyhow::Result;
 use axum::routing::{any, delete, get, patch, post};
@@ -18,7 +20,7 @@ use tracing::info;
 use hyper::header::{HeaderValue, AUTHORIZATION, CONTENT_TYPE, ACCEPT, COOKIE};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use handlers::{alerts, assets, auth as auth_handlers, escrow as escrow_handlers, debug, device, health, probe, proxy, scan, version, ws, ws_technician};
+use handlers::{alerts, assets, escrow as escrow_handlers, debug, device, health, probe, proxy, scan, version, ws, ws_technician};
 use redis_helpers::with_redis;
 use state::AppState;
 
@@ -84,10 +86,42 @@ async fn main() -> Result<()> {
         flw_webhook_secret,
     );
 
+    let daraja_base_url = std::env::var("DARAJA_BASE_URL")
+        .unwrap_or_else(|_| "https://sandbox.safaricom.co.ke".to_string());
+    let daraja_consumer_key = std::env::var("DARAJA_CONSUMER_KEY")
+        .expect("DARAJA_CONSUMER_KEY not set");
+    let daraja_consumer_secret = std::env::var("DARAJA_CONSUMER_SECRET")
+        .expect("DARAJA_CONSUMER_SECRET not set");
+    let daraja_shortcode = std::env::var("DARAJA_SHORTCODE")
+        .expect("DARAJA_SHORTCODE not set");
+    let daraja_b2c_shortcode = std::env::var("DARAJA_B2C_SHORTCODE")
+        .unwrap_or_else(|_| daraja_shortcode.clone());
+    let daraja_initiator_name = std::env::var("DARAJA_INITIATOR_NAME")
+        .expect("DARAJA_INITIATOR_NAME not set");
+    let daraja_security_credential = std::env::var("DARAJA_SECURITY_CREDENTIAL")
+        .expect("DARAJA_SECURITY_CREDENTIAL not set");
+    let daraja_passkey = std::env::var("DARAJA_PASSKEY")
+        .expect("DARAJA_PASSKEY not set");
+    let daraja_callback_base = std::env::var("DARAJA_CALLBACK_BASE")
+        .expect("DARAJA_CALLBACK_BASE not set");
+
+    let daraja = crate::daraja::DarajaClient::new(
+        http_client.clone(),
+        daraja_consumer_key,
+        daraja_consumer_secret,
+        daraja_base_url,
+        daraja_shortcode,
+        daraja_b2c_shortcode,
+        daraja_initiator_name,
+        daraja_security_credential,
+        daraja_passkey,
+        daraja_callback_base,
+    );
+
     let internal_api_key = std::env::var("INTERNAL_API_KEY")
         .unwrap_or_else(|_| "nextbit_internal_secret_2026".to_string());
 
-    let state = Arc::new(AppState { pg, mongo, redis, ml, http_client, flutterwave, catalogue_url, ml_url, internal_api_key });
+    let state = Arc::new(AppState { pg, mongo, redis, ml, http_client, flutterwave, daraja, catalogue_url, ml_url, internal_api_key });
 
     
     // ── Public routes (no auth required) ─────────────────────────────
@@ -157,6 +191,7 @@ async fn main() -> Result<()> {
         .route("/api/escrow/:id/confirm-delivery",       post(escrow_handlers::confirm_delivery))
         .route("/api/escrow/:id/dispute",                post(escrow_handlers::raise_dispute))
         .route("/api/escrow/:id/admin-ruling",           post(escrow_handlers::admin_ruling))
+        .merge(routes::daraja_escrow::daraja_escrow_api_routes())
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             middleware::auth::require_auth,
@@ -171,6 +206,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .nest("/api/b2b",       routes::b2b::b2b_router(state.clone()))
         .nest("/api/admin/b2b", routes::b2b::admin_b2b_router(state.clone()))
+        .merge(routes::daraja_escrow::daraja_callback_routes())
         .merge(public)
         .merge(protected)
         .merge(debug_routes)

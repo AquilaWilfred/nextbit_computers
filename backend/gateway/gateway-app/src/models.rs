@@ -3,6 +3,8 @@ use serde_json::Value;
 
 pub mod probe;
 pub mod escrow;
+pub mod daraja_escrow;
+pub mod wallet;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HardwareReport {

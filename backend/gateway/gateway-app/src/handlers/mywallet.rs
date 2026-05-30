@@ -9,12 +9,13 @@ use axum::{
     Json,
 };
 use serde_json::json;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::state::AppState;
 use crate::models::daraja_escrow::DarajaError;
-use crate::services::daraja::c2b::StkCallback;
-use crate::services::daraja::b2c::B2cResult;
+use crate::daraja::c2b::StkCallback;
+use crate::daraja::b2c::B2cResult;
 use crate::services::mywallet::{
     get_or_create_card, get_wallet_balance,
     initiate_wallet_load, on_wallet_load_stk_callback,
@@ -27,7 +28,7 @@ use crate::services::mywallet::{
 // user_id from JWT — replace Uuid::nil() with your JWT extractor.
 
 pub async fn get_my_wallet(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     // TODO: replace with your JWT extractor: Extension(claims): Extension<Claims>
 ) -> Result<impl IntoResponse, DarajaError> {
     // Placeholder — swap with actual user_id from JWT
@@ -42,7 +43,7 @@ pub async fn get_my_wallet(
 // Body: { "phone": "0712345678", "amount_kes": 500 }
 
 pub async fn load_wallet(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(req):    Json<LoadWalletRequest>,
 ) -> Result<impl IntoResponse, DarajaError> {
     // Placeholder — replace with JWT user_id
@@ -65,7 +66,7 @@ pub async fn load_wallet(
 // Body: { "phone": "0712345678", "amount_kes": 200 }
 
 pub async fn withdraw_from_wallet(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(req):    Json<WithdrawRequest>,
 ) -> Result<impl IntoResponse, DarajaError> {
     let user_id = Uuid::nil();

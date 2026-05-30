@@ -11,20 +11,20 @@ use axum::{
     Json,
 };
 use serde_json::json;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::state::AppState;
 use crate::models::daraja_escrow::{DarajaError, DarajaPaymentRequest};
-use crate::models::escrow::AdminRuling;
-use crate::services::daraja::c2b::{
+use crate::daraja::c2b::{
     StkCallback, C2bConfirmation, ValidationResponse,
 };
-use crate::services::daraja::b2c::B2cResult;
-use crate::services::daraja::account_balance::AccountBalanceResult;
-use crate::services::daraja::tax_remittance::TaxRemittanceResult;
-use crate::services::daraja::query_org::QueryOrgResult;
-use crate::services::daraja::transaction_status::TransactionStatusResult;
-use crate::services::daraja_escrow::{
+use crate::daraja::b2c::B2cResult;
+use crate::daraja::account_balance::AccountBalanceResult;
+use crate::daraja::tax_remittance::TaxRemittanceResult;
+use crate::daraja::query_org::QueryOrgResult;
+use crate::daraja::transaction_status::TransactionStatusResult;
+use crate::daraja_escrow::{
     stk_push_payment, on_stk_callback, on_c2b_confirmation,
     release_to_seller, refund_to_buyer, on_b2c_result, on_tax_result,
 };
@@ -52,7 +52,7 @@ impl IntoResponse for DarajaError {
 // Extracts buyer_id from JWT in middleware (same pattern as existing escrow handlers).
 
 pub async fn initiate_daraja_payment(
-    State(state):  State<AppState>,
+    State(state):  State<Arc<AppState>>,
     Path(escrow_id): Path<Uuid>,
     // In production: extract buyer_id from JWT claims via your existing auth middleware
     // For now, accept it in the request body to mirror the existing escrow pattern
@@ -75,7 +75,7 @@ pub async fn initiate_daraja_payment(
 // Daraja posts here after buyer enters PIN (or cancels / times out).
 
 pub async fn stk_callback(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<StkCallback>,
 ) -> impl IntoResponse {
     match on_stk_callback(&state.pg, payload.body.stk_callback).await {
@@ -94,7 +94,7 @@ pub async fn stk_callback(
 // Reject if escrow_id (BillRefNumber) doesn't exist or amount is wrong.
 
 pub async fn c2b_validation(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<C2bConfirmation>,
 ) -> impl IntoResponse {
     let escrow_id_result = payload.bill_ref_number.parse::<Uuid>();
@@ -115,7 +115,7 @@ pub async fn c2b_validation(
 // Daraja confirms the payment landed. At this point money has moved.
 
 pub async fn c2b_confirmation(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<C2bConfirmation>,
 ) -> impl IntoResponse {
     let escrow_id = match payload.bill_ref_number.parse::<Uuid>() {
@@ -152,7 +152,7 @@ pub async fn c2b_confirmation(
 // Daraja notifies us the B2C (payout or refund) completed/failed.
 
 pub async fn b2c_result(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<B2cResult>,
 ) -> impl IntoResponse {
     match on_b2c_result(&state.pg, payload.result).await {
@@ -167,7 +167,7 @@ pub async fn b2c_result(
 // Daraja couldn't deliver the result in time. We must poll via TransactionStatus.
 
 pub async fn b2c_timeout(
-    State(state): State<AppState>,
+    State(_state): State<Arc<AppState>>,
     Json(payload): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     // Log and alert — the ops team must manually check the payout
@@ -179,7 +179,7 @@ pub async fn b2c_timeout(
 // POST /daraja/tax/result
 
 pub async fn tax_result(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<TaxRemittanceResult>,
 ) -> impl IntoResponse {
     let body = &payload.result;
@@ -249,7 +249,7 @@ pub async fn orginfo_result(
 // Fallback — used when STK or B2C callbacks don't arrive.
 
 pub async fn txstatus_result(
-    State(state): State<AppState>,
+    State(_state): State<Arc<AppState>>,
     Json(payload): Json<TransactionStatusResult>,
 ) -> impl IntoResponse {
     let body = &payload.result;
@@ -270,7 +270,7 @@ pub async fn txstatus_result(
 // Called by your existing admin_ruling handler AFTER applying the state transition.
 
 pub async fn admin_release_payout(
-    State(state):    State<AppState>,
+    State(state):    State<Arc<AppState>>,
     Path(escrow_id): Path<Uuid>,
     Json(body):      Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, DarajaError> {
@@ -296,7 +296,7 @@ pub async fn admin_release_payout(
 // Body: { "buyer_phone": "0712345678" }
 
 pub async fn admin_trigger_refund(
-    State(state):    State<AppState>,
+    State(state):    State<Arc<AppState>>,
     Path(escrow_id): Path<Uuid>,
     Json(body):      Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, DarajaError> {

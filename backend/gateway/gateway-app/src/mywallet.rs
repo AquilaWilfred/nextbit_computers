@@ -12,8 +12,8 @@ use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
 use crate::models::daraja_escrow::{DarajaError, normalise_phone};
-use crate::services::daraja::DarajaClient;
-use crate::services::daraja::b2c::B2cResultBody;
+use crate::daraja::DarajaClient;
+use crate::daraja::b2c::B2cResultBody;
 use crate::services::fee::compute_platform_fee_cents;
 
 // ── Card / Wallet Models ───────────────────────────────────────────────────────

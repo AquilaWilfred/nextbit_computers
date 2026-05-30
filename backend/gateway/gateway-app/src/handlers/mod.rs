@@ -11,3 +11,4 @@ pub mod scan;
 pub mod version;
 pub mod ws;
 pub mod ws_technician;
+pub mod daraja_escrow; 

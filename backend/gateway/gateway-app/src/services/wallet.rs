@@ -6,13 +6,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    models::wallet::{
-        CardResponse, NextbitCard, WalletTransaction,
-        WalletTxStatus, WalletTxType,
-    },
+    models::wallet::{NextbitCard, WalletTransaction, WalletTxType},
     services::fee::{
         self, calculate_load_fee, calculate_withdrawal_fee,
-        kes_to_cents, PaymentMethod, MIN_FIRST_LOAD_CENTS, MIN_TOPUP_LOAD_CENTS,
+        PaymentMethod, MIN_FIRST_LOAD_CENTS, MIN_TOPUP_LOAD_CENTS,
     },
 };
 
@@ -41,7 +38,6 @@ pub enum WalletError {
 
 // ── Card Management ────────────────────────────────────────────────────────────
 
-/// Create a NextBit virtual card for a new user
 pub async fn create_card(
     pool:        &PgPool,
     user_id:     Uuid,
@@ -49,40 +45,36 @@ pub async fn create_card(
 ) -> Result<NextbitCard, WalletError> {
     let card_number  = generate_card_number();
     let now          = Utc::now();
-    // card expires 4 years from now
     let expiry_month = now.month() as i16;
     let expiry_year  = (now.year() + 4) as i16;
 
-    let card = sqlx::query_as!(
-        NextbitCard,
+    let card = sqlx::query_as::<_, NextbitCard>(
         r#"
         INSERT INTO nextbit_cards
             (user_id, card_number, card_holder, expiry_month, expiry_year)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING *
         "#,
-        user_id,
-        card_number,
-        holder_name,
-        expiry_month,
-        expiry_year,
     )
+    .bind(user_id)
+    .bind(card_number)
+    .bind(holder_name)
+    .bind(expiry_month)
+    .bind(expiry_year)
     .fetch_one(pool)
     .await?;
 
     Ok(card)
 }
 
-/// Get card by user_id
 pub async fn get_card(
     pool:    &PgPool,
     user_id: Uuid,
 ) -> Result<NextbitCard, WalletError> {
-    sqlx::query_as!(
-        NextbitCard,
+    sqlx::query_as::<_, NextbitCard>(
         r#"SELECT * FROM nextbit_cards WHERE user_id = $1"#,
-        user_id
     )
+    .bind(user_id)
     .fetch_optional(pool)
     .await?
     .ok_or(WalletError::CardNotFound)
@@ -90,18 +82,15 @@ pub async fn get_card(
 
 // ── Wallet Load ────────────────────────────────────────────────────────────────
 
-/// Credit wallet after Flutterwave confirms payment
-/// Called from the webhook handler after charge.completed verified
 pub async fn credit_wallet_after_load(
-    pool:         &PgPool,
-    user_id:      Uuid,
-    amount_cents: i64,
-    method:       &PaymentMethod,
-    fw_tx_ref:    &str,
-    fw_charge_id: &str,
+    pool:          &PgPool,
+    user_id:       Uuid,
+    amount_cents:  i64,
+    method:        &PaymentMethod,
+    fw_tx_ref:     &str,
+    fw_charge_id:  &str,
     is_first_load: bool,
 ) -> Result<WalletTransaction, WalletError> {
-    // enforce minimum load
     let minimum = if is_first_load {
         MIN_FIRST_LOAD_CENTS
     } else {
@@ -114,19 +103,20 @@ pub async fn credit_wallet_after_load(
         });
     }
 
-    let fees     = calculate_load_fee(amount_cents, method);
-    let net      = fees.net_to_wallet;
-    let tx_type  = method_to_load_type(method);
+    let fees    = calculate_load_fee(amount_cents, method);
+    let net     = fees.net_to_wallet;
+    let tx_type = method_to_load_type(method);
+    let desc    = format!("Wallet load via {:?}", method);
 
-    // atomic: update balance + record transaction
-    let tx = sqlx::query_as!(
-        WalletTransaction,
+    let tx = sqlx::query_as::<_, WalletTransaction>(
         r#"
         WITH updated_card AS (
             UPDATE nextbit_cards
             SET balance_cents = balance_cents + $1
             WHERE user_id = $2 AND is_active = TRUE
-            RETURNING id, balance_cents - $1 AS balance_before, balance_cents AS balance_after
+            RETURNING id,
+                      balance_cents - $1 AS balance_before,
+                      balance_cents      AS balance_after
         )
         INSERT INTO wallet_transactions
             (card_id, user_id, tx_type, status,
@@ -141,15 +131,15 @@ pub async fn credit_wallet_after_load(
         FROM updated_card uc
         RETURNING *
         "#,
-        net,
-        user_id,
-        tx_type    as WalletTxType,
-        amount_cents,
-        fees.fw_fee_cents,
-        fw_tx_ref,
-        fw_charge_id,
-        format!("Wallet load via {:?}", method),
     )
+    .bind(net)
+    .bind(user_id)
+    .bind(tx_type)
+    .bind(amount_cents)
+    .bind(fees.fw_fee_cents)
+    .bind(fw_tx_ref)
+    .bind(fw_charge_id)
+    .bind(desc)
     .fetch_one(pool)
     .await?;
 
@@ -158,8 +148,6 @@ pub async fn credit_wallet_after_load(
 
 // ── Order Payment from Wallet ──────────────────────────────────────────────────
 
-/// Deduct from buyer wallet, lock in escrow
-/// wallet-to-wallet = no Flutterwave fee
 pub async fn pay_order_from_wallet(
     pool:         &PgPool,
     buyer_id:     Uuid,
@@ -171,7 +159,6 @@ pub async fn pay_order_from_wallet(
     if !card.is_active {
         return Err(WalletError::CardInactive);
     }
-
     if card.balance_cents < amount_cents {
         return Err(WalletError::InsufficientBalance {
             have_kes: card.balance_cents as f64 / 100.0,
@@ -179,16 +166,14 @@ pub async fn pay_order_from_wallet(
         });
     }
 
-    // atomic deduct + record
-    let tx = sqlx::query_as!(
-        WalletTransaction,
+    let tx = sqlx::query_as::<_, WalletTransaction>(
         r#"
         WITH updated_card AS (
             UPDATE nextbit_cards
             SET balance_cents = balance_cents - $1
             WHERE user_id = $2
               AND is_active = TRUE
-              AND balance_cents >= $1        -- prevent negative balance
+              AND balance_cents >= $1
             RETURNING id,
                       balance_cents + $1 AS balance_before,
                       balance_cents      AS balance_after
@@ -206,32 +191,30 @@ pub async fn pay_order_from_wallet(
         FROM updated_card uc
         RETURNING *
         "#,
-        amount_cents,
-        buyer_id,
-        escrow_id,
     )
+    .bind(amount_cents)
+    .bind(buyer_id)
+    .bind(escrow_id)
     .fetch_one(pool)
     .await?;
 
-    // if no rows updated = insufficient balance race condition
     Ok(tx)
 }
 
 // ── Seller Payout to Wallet ────────────────────────────────────────────────────
 
-/// Credit seller wallet after escrow releases
 pub async fn credit_seller_payout(
-    pool:              &PgPool,
-    seller_id:         Uuid,
-    escrow_id:         Uuid,
-    gross_cents:       i64,
-    platform_fee_cents:i64,
-    fw_fee_share_cents:i64,
+    pool:               &PgPool,
+    seller_id:          Uuid,
+    escrow_id:          Uuid,
+    gross_cents:        i64,
+    platform_fee_cents: i64,
+    fw_fee_share_cents: i64,
 ) -> Result<WalletTransaction, WalletError> {
-    let net = gross_cents - platform_fee_cents - fw_fee_share_cents;
+    let net      = gross_cents - platform_fee_cents - fw_fee_share_cents;
+    let fee_total = platform_fee_cents + fw_fee_share_cents;
 
-    let tx = sqlx::query_as!(
-        WalletTransaction,
+    let tx = sqlx::query_as::<_, WalletTransaction>(
         r#"
         WITH updated_card AS (
             UPDATE nextbit_cards
@@ -254,12 +237,12 @@ pub async fn credit_seller_payout(
         FROM updated_card uc
         RETURNING *
         "#,
-        net,
-        seller_id,
-        gross_cents,
-        platform_fee_cents + fw_fee_share_cents,
-        escrow_id,
     )
+    .bind(net)
+    .bind(seller_id)
+    .bind(gross_cents)
+    .bind(fee_total)
+    .bind(escrow_id)
     .fetch_one(pool)
     .await?;
 
@@ -283,8 +266,7 @@ pub async fn initiate_withdrawal(
         });
     }
 
-    let tx = sqlx::query_as!(
-        WalletTransaction,
+    let tx = sqlx::query_as::<_, WalletTransaction>(
         r#"
         WITH updated_card AS (
             UPDATE nextbit_cards
@@ -308,11 +290,11 @@ pub async fn initiate_withdrawal(
         FROM updated_card uc
         RETURNING *
         "#,
-        amount_cents,
-        seller_id,
-        fees.fw_fee_cents,
-        net,
     )
+    .bind(amount_cents)
+    .bind(seller_id)
+    .bind(fees.fw_fee_cents)
+    .bind(net)
     .fetch_one(pool)
     .await?;
 
@@ -327,18 +309,17 @@ pub async fn get_transactions(
     limit:   i64,
     offset:  i64,
 ) -> Result<Vec<WalletTransaction>, WalletError> {
-    let txs = sqlx::query_as!(
-        WalletTransaction,
+    let txs = sqlx::query_as::<_, WalletTransaction>(
         r#"
         SELECT * FROM wallet_transactions
         WHERE user_id = $1
         ORDER BY created_at DESC
         LIMIT $2 OFFSET $3
         "#,
-        user_id,
-        limit,
-        offset,
     )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(pool)
     .await?;
 
@@ -348,7 +329,6 @@ pub async fn get_transactions(
 // ── Internal Helpers ───────────────────────────────────────────────────────────
 
 fn generate_card_number() -> String {
-    // prefix NB43 (NextBit, 43 = Kenya calling code)
     let mut rng = rand::thread_rng();
     format!(
         "NB43{:04}{:04}{:04}",

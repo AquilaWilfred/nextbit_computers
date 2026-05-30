@@ -7,9 +7,10 @@
 // Register both in mod.rs (or main.rs) as separate routers.
 
 use axum::{
-    routing::{get, post},
+    routing::post,
     Router,
 };
+use std::sync::Arc;
 
 use crate::handlers::daraja_escrow::{
     initiate_daraja_payment,
@@ -28,8 +29,8 @@ use crate::handlers::daraja_escrow::{
 use crate::state::AppState;
 
 /// Buyer/admin-facing routes — require JWT auth middleware
-pub fn daraja_escrow_api_routes() -> Router<AppState> {
-    Router::new()
+pub fn daraja_escrow_api_routes() -> Router<Arc<AppState>>{
+    Router::<Arc<AppState>>::new()
         // Buyer initiates STK push for an escrow
         .route("/api/escrow/:escrow_id/daraja/pay",     post(initiate_daraja_payment))
         // Admin triggers payout/refund after ruling
@@ -40,8 +41,8 @@ pub fn daraja_escrow_api_routes() -> Router<AppState> {
 /// Daraja callback routes — NO auth middleware (Daraja doesn't send JWT)
 /// These must be publicly reachable via HTTPS.
 /// Protect with Daraja IP allowlist at your reverse proxy / cloud firewall.
-pub fn daraja_callback_routes() -> Router<AppState> {
-    Router::new()
+pub fn daraja_callback_routes() -> Router<Arc<AppState>>{
+    Router::<Arc<AppState>>::new()
         // STK Push callbacks
         .route("/daraja/stk/callback",         post(stk_callback))
         // C2B Paybill/Till callbacks

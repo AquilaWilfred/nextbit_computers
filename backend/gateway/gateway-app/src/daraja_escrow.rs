@@ -19,15 +19,15 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::models::daraja_escrow::{
-    DarajaError, DarajaEscrowRecord, DarajaEscrowResponse, DarajaPaymentInitiated,
+    DarajaError, DarajaEscrowRecord, DarajaPaymentInitiated,
     normalise_phone,
 };
 use crate::models::escrow::{EscrowAction, EscrowState};
-use crate::services::daraja::DarajaClient;
-use crate::services::daraja::c2b::StkCallbackData;
-use crate::services::daraja::b2c::B2cResultBody;
-use crate::services::daraja::tax_remittance::{compute_tax_kes, TaxType};
-use crate::services::escrow::{apply_transition, get_escrow, save_fw_tx_ref};
+use crate::daraja::DarajaClient;
+use crate::daraja::c2b::StkCallbackData;
+use crate::daraja::b2c::B2cResultBody;
+use crate::daraja::tax_remittance::{compute_tax_kes, TaxType};
+use crate::services::escrow::{apply_transition, get_escrow};
 use crate::services::fee::compute_platform_fee_cents;
 
 // ── KRA shortcode (sandbox) ────────────────────────────────────────────────────

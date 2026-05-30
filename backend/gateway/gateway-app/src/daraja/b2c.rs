@@ -18,64 +18,142 @@ use crate::models::daraja_escrow::DarajaError;
 
 // ── Request ────────────────────────────────────────────────────────────────────
 
+// #[derive(Debug, Serialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct B2cRequest {
+//     pub originator_conversation_id: String,   // unique ref — use escrow_id
+//     pub initiator_name:             String,
+//     pub security_credential:        String,
+//     pub command_i_d:                String,   // "BusinessPayment"
+//     pub amount:                     u64,      // KES whole number
+//     pub party_a:                    String,   // your B2C shortcode
+//     pub party_b:                    String,   // recipient phone 2547XXXXXXXX
+//     pub remarks:                    String,
+//     pub queue_timeout_u_r_l:        String,
+//     pub result_u_r_l:               String,
+//     pub occasion:                   String,   // optional free text
+// }
+
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct B2cRequest {
-    pub originator_conversation_id: String,   // unique ref — use escrow_id
+    #[serde(rename = "OriginatorConversationID")]
+    pub originator_conversation_id: String,
+    #[serde(rename = "InitiatorName")]
     pub initiator_name:             String,
+    #[serde(rename = "SecurityCredential")]
     pub security_credential:        String,
-    pub command_i_d:                String,   // "BusinessPayment"
-    pub amount:                     u64,      // KES whole number
-    pub party_a:                    String,   // your B2C shortcode
-    pub party_b:                    String,   // recipient phone 2547XXXXXXXX
+    #[serde(rename = "CommandID")]
+    pub command_i_d:                String,
+    #[serde(rename = "Amount")]
+    pub amount:                     u64,
+    #[serde(rename = "PartyA")]
+    pub party_a:                    String,
+    #[serde(rename = "PartyB")]
+    pub party_b:                    String,
+    #[serde(rename = "Remarks")]
     pub remarks:                    String,
+    #[serde(rename = "QueueTimeOutURL")]
     pub queue_timeout_u_r_l:        String,
+    #[serde(rename = "ResultURL")]
     pub result_u_r_l:               String,
-    pub occasion:                   String,   // optional free text
+    #[serde(rename = "Occasion")]
+    pub occasion:                   String,
 }
 
 // ── Response (Daraja's immediate ACK) ─────────────────────────────────────────
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct B2cResponse {
+//     pub originator_conversation_id: String,
+//     pub conversation_id:            String,
+//     pub response_code:              String,
+//     pub response_description:       String,
+// }
+
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct B2cResponse {
+    #[serde(rename = "OriginatorConversationID")]
     pub originator_conversation_id: String,
+    #[serde(rename = "ConversationID")]
     pub conversation_id:            String,
+    #[serde(rename = "ResponseCode")]
     pub response_code:              String,
+    #[serde(rename = "ResponseDescription")]
     pub response_description:       String,
 }
 
 // ── Result Callback (Daraja → our server) ─────────────────────────────────────
 // Daraja posts this to result_url asynchronously after processing
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct B2cResult {
+//     pub result: B2cResultBody,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct B2cResult {
+    #[serde(rename = "Result")]
     pub result: B2cResultBody,
 }
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct B2cResultBody {
+//     pub result_type:                i32,
+//     pub result_code:                i32,    // 0 = success
+//     pub result_desc:                String,
+//     pub originator_conversation_id: String,
+//     pub conversation_id:            String,
+//     pub transaction_i_d:            String, // Mpesa receipt e.g. OFI2XXXXXXX
+//     pub result_parameters:          Option<B2cResultParameters>,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct B2cResultBody {
+    #[serde(rename = "ResultType")]
     pub result_type:                i32,
-    pub result_code:                i32,    // 0 = success
+    #[serde(rename = "ResultCode")]
+    pub result_code:                i32,
+    #[serde(rename = "ResultDesc")]
     pub result_desc:                String,
+    #[serde(rename = "OriginatorConversationID")]
     pub originator_conversation_id: String,
+    #[serde(rename = "ConversationID")]
     pub conversation_id:            String,
-    pub transaction_i_d:            String, // Mpesa receipt e.g. OFI2XXXXXXX
+    #[serde(rename = "TransactionID")]
+    pub transaction_i_d:            String,
+    #[serde(rename = "ResultParameters")]
     pub result_parameters:          Option<B2cResultParameters>,
 }
 
+
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct B2cResultParameters {
+//     pub result_parameter: Vec<B2cResultItem>,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct B2cResultParameters {
+    #[serde(rename = "ResultParameter")]
     pub result_parameter: Vec<B2cResultItem>,
 }
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct B2cResultItem {
+//     pub key:   String,
+//     pub value: Option<serde_json::Value>,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct B2cResultItem {
+    #[serde(rename = "Key")]
     pub key:   String,
+    #[serde(rename = "Value")]
     pub value: Option<serde_json::Value>,
 }
 

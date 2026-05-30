@@ -3,7 +3,7 @@
 // Amounts are in KES cents (integer) to avoid float rounding errors.
 // KES 1,000 = 100_000 cents
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -118,7 +118,7 @@ pub async fn get_platform_fee(
     pool:         &PgPool,
     amount_cents: i64,
 ) -> Result<i64, sqlx::Error> {
-    let tier = sqlx::query!(
+    let tier = sqlx::query(
         r#"
         SELECT fee_bps
         FROM platform_fee_tiers
@@ -127,13 +127,31 @@ pub async fn get_platform_fee(
           AND (max_amount_cents IS NULL OR max_amount_cents > $1)
         LIMIT 1
         "#,
-        amount_cents
     )
+    .bind(amount_cents)
     .fetch_optional(pool)
     .await?;
 
-    let fee_bps = tier.map(|t| t.fee_bps as i64).unwrap_or(0);
+    let fee_bps = tier
+        .map(|row| row.get::<i16, _>("fee_bps") as i64)
+        .unwrap_or(0);
     Ok(amount_cents * fee_bps / 10_000)
+}
+
+/// Compute the platform fee using the same tiered rules as the database-backed fee config.
+pub fn compute_platform_fee_cents(amount_cents: i64) -> i64 {
+    let fee_bps = if amount_cents >= 10_000_000 {
+        100
+    } else if amount_cents >= 5_000_000 {
+        150
+    } else if amount_cents >= 2_000_000 {
+        200
+    } else if amount_cents >= 500_000 {
+        300
+    } else {
+        0
+    };
+    amount_cents * fee_bps / 10_000
 }
 
 // ── Withdrawal Fee ─────────────────────────────────────────────────────────────

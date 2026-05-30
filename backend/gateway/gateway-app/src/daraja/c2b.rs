@@ -31,21 +31,41 @@ pub struct StkPushRequest {
     pub transaction_desc:    String,
 }
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct StkPushResponse {
+//     pub merchant_request_id:   String,
+//     pub checkout_request_id:   String,
+//     pub response_code:         String,
+//     pub response_description:  String,
+//     pub customer_message:      String,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct StkPushResponse {
-    pub merchant_request_id:   String,
-    pub checkout_request_id:   String,
-    pub response_code:         String,
-    pub response_description:  String,
-    pub customer_message:      String,
+    #[serde(rename = "MerchantRequestID")]
+    pub merchant_request_id:  String,
+    #[serde(rename = "CheckoutRequestID")]
+    pub checkout_request_id:  String,
+    #[serde(rename = "ResponseCode")]
+    pub response_code:        String,
+    #[serde(rename = "ResponseDescription")]
+    pub response_description: String,
+    #[serde(rename = "CustomerMessage")]
+    pub customer_message:     String,
 }
 
 // ── STK Push Callback (Daraja → our server) ───────────────────────────────────
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct StkCallback {
+//     pub body: StkCallbackBody,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct StkCallback {
+    #[serde(rename = "Body")]
     pub body: StkCallbackBody,
 }
 
@@ -55,28 +75,57 @@ pub struct StkCallbackBody {
     pub stk_callback: StkCallbackData,
 }
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct StkCallbackData {
+//     pub merchant_request_id:  String,
+//     pub checkout_request_id:  String,
+//     pub result_code:          i32,      // 0 = success
+//     pub result_desc:          String,
+//     pub callback_metadata:    Option<StkCallbackMetadata>,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct StkCallbackData {
+    #[serde(rename = "MerchantRequestID")]
     pub merchant_request_id:  String,
+    #[serde(rename = "CheckoutRequestID")]
     pub checkout_request_id:  String,
-    pub result_code:          i32,      // 0 = success
+    #[serde(rename = "ResultCode")]
+    pub result_code:          i32,
+    #[serde(rename = "ResultDesc")]
     pub result_desc:          String,
+    #[serde(rename = "CallbackMetadata")]
     pub callback_metadata:    Option<StkCallbackMetadata>,
 }
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct StkCallbackMetadata {
+//     pub item: Vec<StkMetadataItem>,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct StkCallbackMetadata {
+    #[serde(rename = "Item")]
     pub item: Vec<StkMetadataItem>,
 }
 
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct StkMetadataItem {
+//     pub name:  String,
+//     pub value: Option<serde_json::Value>,
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct StkMetadataItem {
+    #[serde(rename = "Name")]
     pub name:  String,
+    #[serde(rename = "Value")]
     pub value: Option<serde_json::Value>,
 }
+
 
 impl StkCallbackMetadata {
     /// Extract a named field from the metadata item list
