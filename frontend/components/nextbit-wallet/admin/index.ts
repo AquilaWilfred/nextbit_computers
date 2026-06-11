@@ -1,6 +1,5 @@
 // components/nextbit-wallet/admin/index.ts
 
-export { AdminCardsHeader } from './AdminCardsHeader';
 export { StatCard } from './StatCard';
 export { StatsGrid } from './StatsGrid';
 export { CardTypeBreakdown } from './CardTypeBreakdown';

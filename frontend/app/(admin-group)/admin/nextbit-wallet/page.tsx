@@ -9,7 +9,6 @@ import { useApplicationActions } from "@/hooks/nextbit-wallet/useApplicationActi
 import { useAdminFilters } from "@/hooks/nextbit-wallet/useAdminFilters";
 import { AdminTab } from "@/types/nextbit-wallet/admin.cards.types";
 import {
-  AdminCardsHeader,
   StatsGrid,
   CardTypeBreakdown,
   TabNavigation,
@@ -65,8 +64,6 @@ export default function CardsAdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
-      <AdminCardsHeader stats={stats} onRefresh={refetch} />
-
       <div className="max-w-[1400px] mx-auto px-6 py-6">
         <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} counts={tabCounts} />
 

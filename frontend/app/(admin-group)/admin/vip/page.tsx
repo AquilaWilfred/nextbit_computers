@@ -475,27 +475,6 @@ export default function VIPAdminPage() {
 
   return (
     <div style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif", background: "#f8fafc", minHeight: "100vh" }}>
-      {/* Nav */}
-      <div style={{
-        background: "#0f172a", color: "#fff", padding: "0 32px", height: 56,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        position: "sticky", top: 0, zIndex: 50,
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-      }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          {stats && stats.pendingMembers > 0 && (
-            <div style={{ background: "#d97706", color: "#fff", borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>
-              ⏳ {stats.pendingMembers} Pending Members
-            </div>
-          )}
-          {stats && stats.pendingPurchases > 0 && (
-            <div style={{ background: "#2563eb", color: "#fff", borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>
-              💳 {stats.pendingPurchases} Pending Purchases
-            </div>
-          )}
-        </div>
-      </div>
-
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 24px" }}>
         {/* Title */}
         <div style={{ marginBottom: 24 }}>
