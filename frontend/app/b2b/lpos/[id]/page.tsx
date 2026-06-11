@@ -35,20 +35,21 @@ interface AuditLog {
 
 export default function LPODetailPage() {
   const params = useParams();
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const router = useRouter();
   const [lpo, setLpo] = useState<LPO | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isValidLpoId(params?.id)) return;
+    if (!isValidLpoId(id)) return;
     fetchLPO();
-  }, [params?.id]);
+  }, [id]);
 
   const fetchLPO = async () => {
-    if (!isValidLpoId(params?.id)) return;
+    if (!isValidLpoId(id)) return;
     try {
-      const response = await fetch(`/api/b2b/lpos/${params.id}`);
+      const response = await fetch(`/api/b2b/lpos/${id}`);
       if (!response.ok) throw new Error("Failed to fetch LPO");
       const data = await response.json();
       setLpo(data);
@@ -61,9 +62,9 @@ export default function LPODetailPage() {
   };
 
   const handleSubmit = async () => {
-    if (!isValidLpoId(params?.id)) return;
+    if (!isValidLpoId(id)) return;
     try {
-      const response = await fetch(`/api/b2b/lpos/${params.id}/soft-lock`, {
+      const response = await fetch(`/api/b2b/lpos/${id}/soft-lock`, {
         method: "POST",
       });
       if (!response.ok) throw new Error("Failed to submit LPO");
@@ -75,9 +76,9 @@ export default function LPODetailPage() {
   };
 
   const handleApprove = async () => {
-    if (!isValidLpoId(params?.id)) return;
+    if (!isValidLpoId(id)) return;
     try {
-      const response = await fetch(`/api/b2b/lpos/${params.id}/approve`, {
+      const response = await fetch(`/api/b2b/lpos/${id}/approve`, {
         method: "POST",
       });
       if (!response.ok) throw new Error("Failed to approve LPO");
@@ -93,7 +94,7 @@ export default function LPODetailPage() {
     return <div className="container mx-auto p-6">Loading...</div>;
   }
 
-  if (!isValidLpoId(params?.id)) {
+  if (!isValidLpoId(id)) {
     return <div className="container mx-auto p-6">Invalid LPO ID.</div>;
   }
 

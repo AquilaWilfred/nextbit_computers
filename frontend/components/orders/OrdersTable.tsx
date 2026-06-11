@@ -32,7 +32,6 @@ export const OrdersTable = memo(function OrdersTable({
   sortConfig,
   updatingOrderId,
   onSort,
-  onStatusChange,
   onView,
   onInvoice,
   onTracking,

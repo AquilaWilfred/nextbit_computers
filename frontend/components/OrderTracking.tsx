@@ -35,19 +35,19 @@ declare global {
   interface Window {
     google: any;
   }
-  namespace google.maps {
-    class Map {
-      constructor(element: HTMLElement, options?: any);
-      panTo(latLng: { lat: number; lng: number }): void;
-    }
-    namespace marker {
-      class AdvancedMarkerElement {
-        constructor(options: any);
-        position: { lat: number; lng: number };
-        content: HTMLElement | null;
-      }
-    }
-  }
+  // namespace google.maps {
+  //   class Map {
+  //     constructor(element: HTMLElement, options?: any);
+  //     panTo(latLng: { lat: number; lng: number }): void;
+  //   }
+  //   namespace marker {
+  //     class AdvancedMarkerElement {
+  //       constructor(options: any);
+  //       position: { lat: number; lng: number };
+  //       content: HTMLElement | null;
+  //     }
+  //   }
+  // }
 }
 
 // ---------------------------------------------------------------------------

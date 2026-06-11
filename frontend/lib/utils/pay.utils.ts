@@ -83,11 +83,11 @@ export function validatePhoneNumber(phone: string): boolean {
 }
 
 export function isEscrowCompletable(escrow: EscrowRecord): boolean {
-  return escrow.state === "funds_held";
+  return escrow.state === "funds_held_in_escrow";
 }
 
 export function isEscrowDisputable(escrow: EscrowRecord): boolean {
-  return escrow.state === "funds_held" || escrow.state === "delivery_confirmed";
+  return escrow.state === "funds_held_in_escrow" || escrow.state === "delivery_confirmed";
 }
 
 export function isEscrowReleasable(escrow: EscrowRecord): boolean {
