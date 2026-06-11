@@ -138,7 +138,7 @@ def require_role(roles: Sequence[str]):
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == request.email).first()
-    if not user or not verify_password(request.password, user.password or ""):
+    if not user or not user.password or not verify_password(request.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     user.lastSignedIn = datetime.utcnow()
