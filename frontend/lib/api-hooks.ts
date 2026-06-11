@@ -1,5 +1,6 @@
+// lib/api-hooks.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiClient, proxyClient } from './api-client';
+import { proxyClient } from './api-client';
 import { useAuth } from '@/hooks/auth';
 
 // ---------------------------------------------------------------------------
@@ -23,7 +24,9 @@ export function useFetch<T>(path: string, enabled = true): UseFetchResult<T> {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await apiClient.get<T>(path);
+      const res = await fetch(path, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json() as T;
       setData(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
