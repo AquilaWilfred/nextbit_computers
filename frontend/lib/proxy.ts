@@ -1,4 +1,3 @@
-// Prefer explicit production envs, then common public envs, then localhost for dev
 const CATALOGUE =
   process.env.CATALOGUE_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
@@ -13,6 +12,7 @@ export async function proxyToCatalogue(request: Request, upstreamPath?: string):
 
   const headers = new Headers(request.headers);
   headers.delete('host');
+  headers.delete('accept-encoding'); // ← prevent upstream from compressing
 
   const cookie = request.headers.get('cookie');
   if (cookie) headers.set('cookie', cookie);
@@ -35,14 +35,14 @@ export async function proxyToCatalogue(request: Request, upstreamPath?: string):
 
   console.log('[proxyToCatalogue] upstream response', res.status, upstream);
 
-  // Copy response headers but rewrite set-cookie to be host-relative
   const resHeaders = new Headers();
   res.headers.forEach((value, key) => {
-    if (key.toLowerCase() === 'set-cookie') {
-      // Strip domain/secure so cookie can be set on the current host in dev
+    const lower = key.toLowerCase();
+    if (lower === 'set-cookie') {
       const rewritten = value.replace(/; domain=[^;]*/i, '').replace(/; secure/i, '');
       resHeaders.append('set-cookie', rewritten);
-    } else {
+    } else if (lower !== 'content-encoding' && lower !== 'transfer-encoding') {
+      // ← drop encoding headers; body is already decoded by fetch()
       resHeaders.set(key, value);
     }
   });
@@ -68,6 +68,7 @@ export async function proxyToGateway(request: Request, upstreamPath?: string): P
 
   const headers = new Headers(request.headers);
   headers.delete('host');
+  headers.delete('accept-encoding'); // ← prevent upstream from compressing
 
   const cookie = request.headers.get('cookie');
   if (cookie) headers.set('cookie', cookie);
@@ -92,10 +93,12 @@ export async function proxyToGateway(request: Request, upstreamPath?: string): P
 
   const resHeaders = new Headers();
   res.headers.forEach((value, key) => {
-    if (key.toLowerCase() === 'set-cookie') {
+    const lower = key.toLowerCase();
+    if (lower === 'set-cookie') {
       const rewritten = value.replace(/; domain=[^;]*/i, '').replace(/; secure/i, '');
       resHeaders.append('set-cookie', rewritten);
-    } else {
+    } else if (lower !== 'content-encoding' && lower !== 'transfer-encoding') {
+      // ← drop encoding headers; body is already decoded by fetch()
       resHeaders.set(key, value);
     }
   });
