@@ -17,6 +17,7 @@ RUN cargo build --release --bin gateway 2>/dev/null || true
 RUN rm -rf gateway-app/src
 
 COPY gateway-app/src ./gateway-app/src
+COPY gateway-app/migrations ./gateway-app/migrations
 RUN touch gateway-app/src/main.rs
 RUN cargo build --release --bin gateway
 
@@ -31,5 +32,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY --from=builder /app/target/release/gateway ./gateway
+COPY --from=builder /app/gateway-app/migrations ./migrations
 EXPOSE 8080
 CMD ["./gateway"]
