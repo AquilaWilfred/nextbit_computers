@@ -14,6 +14,12 @@ class ApiClient {
     body?: any
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
+    
+    // Debug logging for URL construction
+    if (typeof window !== 'undefined' && (path.includes('settings') || path.includes('categories'))) {
+      console.debug(`[ApiClient] ${method} ${path} -> full URL: ${url}, baseUrl: "${this.baseUrl}"`);
+    }
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
