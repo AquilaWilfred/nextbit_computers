@@ -1,7 +1,18 @@
 import type { NextConfig } from "next";
 
-const CATALOGUE = process.env.CATALOGUE_URL ?? "http://127.0.0.1:8001";
-const GATEWAY = process.env.AXUM_GATEWAY_URL ?? process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://127.0.0.1:8080";
+// Match env priority with proxy.ts: explicit prod envs first, then fallback to localhost for dev
+const CATALOGUE =
+  process.env.CATALOGUE_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.AXUM_GATEWAY_URL ??
+  "http://127.0.0.1:8001";
+
+const GATEWAY =
+  process.env.AXUM_GATEWAY_URL ??
+  process.env.NEXT_PUBLIC_GATEWAY_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.CATALOGUE_URL ??
+  "http://127.0.0.1:8080";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['192.168.100.1', '192.168.100.2', 'localhost'],
