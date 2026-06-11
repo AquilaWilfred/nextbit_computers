@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -119,8 +118,7 @@ export default function AddressesPage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
+     <div className="max-w-4xl mx-auto space-y-6 py-8 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Saved Addresses</h1>
@@ -283,6 +281,5 @@ export default function AddressesPage() {
           </>
         )}
       </div>
-    </DashboardLayout>
   );
 }
