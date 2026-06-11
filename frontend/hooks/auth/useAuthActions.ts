@@ -56,19 +56,24 @@ export function useAuthActions({ onVerificationNeeded, onResetNeeded }: AuthActi
     }
   }, [login, refetchUser]);
 
-  const handleRegister = useCallback(async (data: any): Promise<{ success: boolean; data?: AuthResponse }> => {
+  const handleRegister = useCallback(async (data: any): Promise<{ success: boolean; needsVerification?: boolean; verificationData?: VerificationData; data?: AuthResponse }> => {
     try {
       const result = await register.mutate(data) as AuthResponse;
-      toast.success("Account created! Please check your email for the verification code.");
+      toast.success("Account created successfully.");
       if (result.token && result.email) {
-        onVerificationNeeded({ token: result.token, email: result.email });
+        const verificationData = { token: result.token, email: result.email };
+        onVerificationNeeded(verificationData);
+        return { success: true, needsVerification: true, verificationData, data: result };
       }
-      return { success: true, data: result };
+
+      window.dispatchEvent(new Event("userAuthChanged"));
+      await refetchUser();
+      return { success: true, needsVerification: false, data: result };
     } catch (err: any) {
       toast.error(err.message || "Registration failed");
       return { success: false };
     }
-  }, [register, onVerificationNeeded]);
+  }, [register, onVerificationNeeded, refetchUser]);
 
   const handleForgotPassword = useCallback(async (email: string): Promise<{ success: boolean }> => {
     try {

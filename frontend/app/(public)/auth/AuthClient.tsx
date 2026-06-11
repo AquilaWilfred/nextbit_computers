@@ -19,6 +19,7 @@ import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import { VerifyEmailForm } from "@/components/auth/VerifyEmailForm";
 import { TechnicianApplicationForm } from "@/components/auth/TechnicianApplicationForm";
 import { OAuthButtons } from "@/components/auth/OAuthButtons";
+import { normalizeRedirectPath } from "@/lib/const";
 
 type AuthMode = 'login' | 'register' | 'forgot-password';
 
@@ -39,7 +40,8 @@ export default function AuthClient() {
   const { showApplication, setShowApplication, pendingUserId, pendingUserEmail } = useTechnicianCheck(user);
 
   // URL params
-  const redirectUrl = searchParams.get("redirect") || "/dashboard";
+  const rawRedirect = searchParams.get("redirect") || "/dashboard";
+  const redirectUrl = normalizeRedirectPath(rawRedirect) ?? "/dashboard";
   const oauthError = searchParams.get("error");
   const mode = searchParams.get("mode");
   const prefillEmail = searchParams.get("email") || "";
@@ -50,6 +52,10 @@ export default function AuthClient() {
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [verificationData, setVerificationData] = useState<VerificationDataType | null>(null);
   const [resetData, setResetData] = useState<ResetDataType | null>(null);
+
+  useEffect(() => {
+    setAuthMode(mode === "register" ? "register" : "login");
+  }, [mode]);
 
   // Form state
   const { form, showPassword, updateField, updatePhone, setShowPassword, validateRegistration, getFullName } = 
@@ -106,15 +112,19 @@ export default function AuthClient() {
         return;
       }
 
-      await handleRegister({
+      const result = await handleRegister({
         name: getFullName,
         email: form.email,
         password: form.password,
         phone: form.phone,
-        claimOrderNumber
+        claimOrderNumber,
       });
+
+      if (result.success && !result.needsVerification) {
+        router.push(redirectUrl);
+      }
     }
-  }, [authMode, form, handleLogin, handleRegister, handleForgotPassword, validateRegistration, getFullName, claimOrderNumber]);
+  }, [authMode, form, handleLogin, handleRegister, handleForgotPassword, validateRegistration, getFullName, claimOrderNumber, redirectUrl, verificationData]);
 
   const toggleAuthMode = useCallback(() => {
     setAuthMode(prev => prev === 'login' ? 'register' : 'login');
