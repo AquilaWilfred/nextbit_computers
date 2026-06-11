@@ -29,7 +29,7 @@ export async function GET(_request: NextRequest, context: Context) {
     return new Response("Not found", { status: 404 });
   }
 
-  return new Response(upload.body, {
+  return new Response(Buffer.from(upload.body), {
     status: 200,
     headers: {
       "Content-Type": upload.contentType,
