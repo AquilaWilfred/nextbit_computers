@@ -14,7 +14,7 @@ interface CardsTableProps {
   isActionLoading: (cardId: string, action: string) => boolean;
 }
 
-const formatCurrency = (value: number) => value.toLocaleString();
+const formatCurrency = (value: number) => (value ?? 0).toLocaleString();
 
 export const CardsTable: FC<CardsTableProps> = ({
   cards,
@@ -51,8 +51,8 @@ export const CardsTable: FC<CardsTableProps> = ({
               <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={card.status} /></td>
               <td className="px-4 py-3 whitespace-nowrap font-semibold">KES {formatCurrency(card.balance)}</td>
               <td className="px-4 py-3 whitespace-nowrap text-gray-500">KES {formatCurrency(card.totalSpent)}</td>
-              <td className="px-4 py-3 whitespace-nowrap text-gray-400 text-xs">{new Date(card.issuedAt).toLocaleDateString()}</td>
-              <td className="px-4 py-3 whitespace-nowrap text-gray-400 text-xs">{new Date(card.expiresAt).toLocaleDateString()}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-gray-400 text-xs">{card.issuedAt ? new Date(card.issuedAt).toLocaleDateString() : "—"}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-gray-400 text-xs">{card.expiresAt ? new Date(card.expiresAt).toLocaleDateString() : "—"}</td>
               <td className="px-4 py-3 whitespace-nowrap">
                 <div className="flex gap-1.5">
                   <ActionButton
