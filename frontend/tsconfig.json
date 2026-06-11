@@ -22,7 +22,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+    "types": ["google.maps"]
   },
   "include": [
     "next-env.d.ts",
@@ -30,7 +31,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
-, "app/(public)/e-waste/page.tsx"  ],
+    "**/*.mts",
+    "app/(public)/e-waste/page.tsx"
+  ],
   "exclude": ["node_modules"]
 }
