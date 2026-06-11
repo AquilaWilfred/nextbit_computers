@@ -103,15 +103,27 @@ class CardsService {
     if (!response.ok) {
       let message = `HTTP ${response.status}`;
       try {
-        const body = await response.json();
-        message = body?.detail ?? body?.message ?? message;
+        const text = await response.text();
+        if (text) {
+          const body = JSON.parse(text);
+          message = body?.detail ?? body?.message ?? message;
+        }
       } catch {
         // non-JSON body — keep default message
       }
       throw new ApiError(message, response.status, url);
     }
 
-    return response.json() as Promise<T>;
+    // Parse response as text first, then JSON to handle empty bodies gracefully
+    const text = await response.text();
+    if (!text) {
+      return null as unknown as T;
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch (err) {
+      throw new ApiError(`Invalid JSON response: ${err instanceof Error ? err.message : 'unknown error'}`, response.status, url);
+    }
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
