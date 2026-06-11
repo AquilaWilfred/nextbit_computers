@@ -1,15 +1,25 @@
 export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...init,
   });
-  
+
+  const text = await res.text().catch(() => "");
   if (!res.ok) {
-    const msg = await res.text().catch(() => res.statusText);
-    throw new Error(msg || `HTTP ${res.status}`);
+    try {
+      const body = JSON.parse(text);
+      throw new Error(body?.message || body?.error || text || `HTTP ${res.status}`);
+    } catch {
+      throw new Error(text || `HTTP ${res.status}`);
+    }
   }
-  
-  return res.json();
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Invalid JSON response from ${url}: ${text}`);
+  }
 }
 
 export function formatCoordinates(lat: string, lng: string): string {

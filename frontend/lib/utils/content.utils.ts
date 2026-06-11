@@ -4,13 +4,25 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...options,
   });
+
+  const text = await res.text().catch(() => "");
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string }).message || "Request failed");
+    try {
+      const body = JSON.parse(text);
+      throw new Error((body as { message?: string }).message || (body as { error?: string }).error || "Request failed");
+    } catch {
+      throw new Error(text || "Request failed");
+    }
   }
-  return res.json() as Promise<T>;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Invalid JSON response from ${url}: ${text}`);
+  }
 }
 
 export function formatDate(dateString: string): string {

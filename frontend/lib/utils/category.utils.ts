@@ -10,13 +10,25 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...options,
   });
+
+  const text = await res.text().catch(() => "");
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body?.message ?? `Request failed: ${res.status}`);
+    try {
+      const body = JSON.parse(text);
+      throw new Error(body?.message ?? body?.error ?? `Request failed: ${res.status}`);
+    } catch {
+      throw new Error(text || `Request failed: ${res.status}`);
+    }
   }
-  return res.json();
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Invalid JSON response from ${url}: ${text}`);
+  }
 }
 
 export function getRootCategories(categories: Category[]): Category[] {

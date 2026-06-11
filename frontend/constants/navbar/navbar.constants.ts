@@ -13,7 +13,6 @@ export const SERVICE_ITEMS = [
   { href: "/insurance", label: "Insurance", icon: "Shield" },
   { href: "/nextbit-wallet", label: "NextBit Wallet", icon: "CreditCard" },
   { href: "/vip", label: "VIP Services", icon: "Crown" },
-  { href: "/conflicts", label: "Resolution Hub", icon: "Headphones" },
 ];
 
 export const CUSTOMER_SUGGESTED_PROMPTS = [

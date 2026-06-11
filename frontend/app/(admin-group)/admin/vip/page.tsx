@@ -482,18 +482,6 @@ export default function VIPAdminPage() {
         position: "sticky", top: 0, zIndex: 50,
         borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 30, height: 30, background: "#d97706",
-            borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 16,
-          }}>👑</div>
-          <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.02em" }}>NextBit Admin</span>
-          <span style={{
-            background: "rgba(255,255,255,0.07)", color: "#94a3b8",
-            fontSize: 11, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
-          }}>VIP & International Trade</span>
-        </div>
         <div style={{ display: "flex", gap: 8 }}>
           {stats && stats.pendingMembers > 0 && (
             <div style={{ background: "#d97706", color: "#fff", borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>

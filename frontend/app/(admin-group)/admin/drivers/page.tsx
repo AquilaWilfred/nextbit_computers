@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import AdminLayout from "@/components/admin/AdminLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,9 +114,8 @@ export default function DriversPage() {
   };
 
   return (
-    <AdminLayout>
-      <div className="p-6 space-y-6">
-        {/* Header */}
+    <div className="p-6 space-y-6">
+      {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -260,6 +258,5 @@ export default function DriversPage() {
           )}
         </Card>
       </div>
-    </AdminLayout>
   );
 }
