@@ -1,4 +1,4 @@
-const DEFAULT_BACKEND_API_BASE = "http://localhost:8080/api";
+const DEFAULT_BACKEND_API_BASE = process.env.AXUM_GATEWAY_URL ? `${process.env.AXUM_GATEWAY_URL}/api` : "http://localhost:8080/api";
 
 export function getBackendApiBase(): string {
   return (
