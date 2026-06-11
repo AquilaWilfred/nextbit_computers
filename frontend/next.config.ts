@@ -1,15 +1,17 @@
 import type { NextConfig } from "next";
 
 // Match env priority with proxy.ts: explicit prod envs first, then fallback to localhost for dev
+// Prefer explicit public vars used during Vercel builds, then fall back to other names.
 const CATALOGUE =
+  process.env.NEXT_PUBLIC_CATALOGUE_URL ??
   process.env.CATALOGUE_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.AXUM_GATEWAY_URL ??
   "http://127.0.0.1:8001";
 
 const GATEWAY =
-  process.env.AXUM_GATEWAY_URL ??
   process.env.NEXT_PUBLIC_GATEWAY_URL ??
+  process.env.AXUM_GATEWAY_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.CATALOGUE_URL ??
   "http://127.0.0.1:8080";
