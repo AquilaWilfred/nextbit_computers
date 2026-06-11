@@ -47,20 +47,21 @@ const formatKES = (n: number, currency = "KES") =>
 
 export default function SupplierDetailPage() {
   const params = useParams();
+  const id = Array.isArray(params?.id) ? params.id[0] : (params?.id as string);
   const router = useRouter();
   const [supplier, setSupplier] = useState<SupplierDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchSupplier = async () => {
-      if (!isValidId(params?.id)) {
+      if (!isValidId(id)) {
         toast.error("Invalid supplier ID.");
         setLoading(false);
         return;
       }
 
       try {
-        const response = await fetch(`/api/b2b/suppliers/${params.id}`);
+        const response = await fetch(`/api/b2b/suppliers/${id}`);
         if (!response.ok) throw new Error("Failed to load supplier");
         const data = await response.json();
         setSupplier(data);
@@ -72,7 +73,7 @@ export default function SupplierDetailPage() {
     };
 
     fetchSupplier();
-  }, [params.id]);
+  }, [id]);
 
   if (loading) {
     return <div className="container mx-auto p-6">Loading supplier...</div>;

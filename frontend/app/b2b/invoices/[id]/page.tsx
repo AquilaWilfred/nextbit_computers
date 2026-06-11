@@ -24,16 +24,17 @@ interface Invoice {
 
 export default function InvoiceDetailPage() {
   const params = useParams();
+  const id = Array.isArray(params?.id) ? params.id[0] : (params?.id as string);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchInvoice();
-  }, [params.id]);
+  }, [id]);
 
   const fetchInvoice = async () => {
     try {
-      const response = await fetch(`/api/b2b/invoices/${params.id}`);
+      const response = await fetch(`/api/b2b/invoices/${id}`);
       if (!response.ok) throw new Error("Failed to fetch invoice");
       const data = await response.json();
       setInvoice(data);
@@ -46,7 +47,7 @@ export default function InvoiceDetailPage() {
 
   const handleDownloadPDF = async () => {
     try {
-      const response = await fetch(`/api/b2b/invoices/${params.id}/pdf`);
+      const response = await fetch(`/api/b2b/invoices/${id}/pdf`);
       if (!response.ok) throw new Error("Failed to download PDF");
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
