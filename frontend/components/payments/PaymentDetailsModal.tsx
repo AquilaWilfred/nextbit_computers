@@ -5,8 +5,8 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Payment } from "@/types/pay.types";
-import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_COLORS } from "@/constants/pay.constants";
-import { formatAmount, formatDateTime } from "@/lib/utils/pay.utils";
+import { PAYMENT_METHOD_LABELS } from "@/constants/pay.constants";
+import { formatAmount, formatDateTime, getPaymentStatusColor } from "@/lib/utils/pay.utils";
 
 interface PaymentDetailsModalProps {
   payment: Payment | null;
@@ -31,7 +31,7 @@ export const PaymentDetailsModal = memo(function PaymentDetailsModal({
     {
       label: "Status",
       value: (
-        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-1 ${PAYMENT_STATUS_COLORS[payment.status] || ""}`}>
+        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-1 ${getPaymentStatusColor(payment.status)}`}>
           {payment.status}
         </span>
       ),

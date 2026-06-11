@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useFetch } from "./useFetch";
 import { Announcement } from "@/types/home.types";
-import { WS_PORT } from "@/constants/homeConstants";
+import { WS_URL } from "@/constants/homeConstants";
 
 export function useAnnouncements(fallbackUrl: string) {
   const [announcements, setAnnouncements] = useState<Announcement[] | undefined>(undefined);
@@ -20,10 +20,10 @@ export function useAnnouncements(fallbackUrl: string) {
 
   // WebSocket for live updates
   useEffect(() => {
-    if (typeof window === "undefined" || !WS_PORT) return;
+    if (typeof window === "undefined" || !WS_URL) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const wsUrl = `${protocol}://${window.location.hostname}:${WS_PORT}/api/ws/announcements`;
+    const baseUrl = WS_URL.replace(/\/$/, "");
+    const wsUrl = `${baseUrl}/api/ws/announcements`;
 
     let ws: WebSocket;
     let retryTimer: ReturnType<typeof setTimeout>;

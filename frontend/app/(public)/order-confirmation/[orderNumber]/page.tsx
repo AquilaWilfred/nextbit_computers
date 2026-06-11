@@ -1,7 +1,9 @@
 "use client";
 import { useParams } from "next/navigation";
 import { useFetch } from "@/lib/api-hooks";
+import { useEscrow } from "@/hooks/payments/useEscrow";
 import { formatPrice, getOrderStatusColor, getOrderStatusLabel } from "@/lib/cart";
+import { EscrowStatusBadge } from "@/components/payments/EscrowStatusBadge";
 import {
   CheckCircle,
   CreditCard,
@@ -54,6 +56,7 @@ interface Order {
   shippingCost: string;
   total: string;
   userId?: string;
+  escrowId?: string;
 }
 
 interface OrderConfirmationData {
@@ -67,9 +70,15 @@ export default function OrderConfirmation() {
   const orderNumber = params?.orderNumber;
 
   const { data, isLoading, error } = useFetch<OrderConfirmationData>(
-    `/orders/by-number/${orderNumber}`,
+    `/api/orders/by-number/${orderNumber}`,
     !!orderNumber
   );
+
+  const order = data?.order;
+  const { escrow, isLoading: escrowLoading } = useEscrow({
+    escrowId: order?.escrowId,
+    enabled: !!order?.escrowId && order?.paymentMethod === "mpesa",
+  });
 
   if (isLoading) {
     return (
@@ -101,7 +110,7 @@ export default function OrderConfirmation() {
     );
   }
 
-  const { order, items, history } = data;
+  const { order: orderData, items, history } = data;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -119,47 +128,69 @@ export default function OrderConfirmation() {
           <div className="grid sm:grid-cols-2 gap-4 mb-5">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Order Number</p>
-              <p className="font-mono font-semibold text-sm">{order.orderNumber}</p>
+              <p className="font-mono font-semibold text-sm">{orderData.orderNumber}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Order Status</p>
-              <Badge className={`text-xs ${getOrderStatusColor(order.status)}`}>
-                {getOrderStatusLabel(order.status)}
+              <Badge className={`text-xs ${getOrderStatusColor(orderData.status)}`}>
+                {getOrderStatusLabel(orderData.status)}
               </Badge>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Payment Status</p>
-              <Badge className={`text-xs ${order.paymentStatus === "paid" ? "text-green-600 bg-green-50 border-green-200" : "text-yellow-600 bg-yellow-50 border-yellow-200"}`}>
-                {order.paymentStatus === "paid" ? "✓ Paid" : "Pending"}
+              <Badge className={`text-xs ${orderData.paymentStatus === "paid" ? "text-green-600 bg-green-50 border-green-200" : "text-yellow-600 bg-yellow-50 border-yellow-200"}`}>
+                {orderData.paymentStatus === "paid" ? "✓ Paid" : "Pending"}
               </Badge>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Payment Method</p>
-              <p className="text-sm font-medium capitalize">{order.paymentMethod ?? "—"}</p>
+              <p className="text-sm font-medium capitalize">{orderData.paymentMethod ?? "—"}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Order Date</p>
-              <p className="text-sm">{new Date(order.createdAt).toLocaleDateString()}</p>
+              <p className="text-sm">{new Date(orderData.createdAt).toLocaleDateString()}</p>
             </div>
-            {order.estimatedDelivery && (
+            {orderData.estimatedDelivery && (
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Estimated Delivery</p>
-                <p className="text-sm font-medium text-green-600">{new Date(order.estimatedDelivery).toLocaleDateString()}</p>
+                <p className="text-sm font-medium text-green-600">{new Date(orderData.estimatedDelivery).toLocaleDateString()}</p>
               </div>
             )}
           </div>
+
+          {escrow && (
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">M-Pesa Escrow Status</p>
+                {escrowLoading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
+              </div>
+              <div className="flex items-center gap-2">
+                <EscrowStatusBadge state={escrow.state} />
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  Amount: <span className="font-semibold">{formatPrice(parseFloat(escrow.amount))}</span>
+                </p>
+              </div>
+              <p className="text-xs text-blue-600 dark:text-blue-500 mt-2">
+                {escrow.state === "funds_held_in_escrow" && "Your payment is secure in escrow. Confirm delivery to release funds to the seller."}
+                {escrow.state === "delivery_confirmed" && "Delivery confirmed! Funds will be released to the seller."}
+                {escrow.state === "payout_completed" && "Payment complete! Seller has received the funds."}
+                {escrow.state === "dispute_raised" && "A dispute has been raised on this order. An admin will review and resolve it."}
+                {escrow.state === "payment_pending" && "Waiting for payment confirmation..."}
+              </p>
+            </div>
+          )}
 
           <div className="bg-muted/40 rounded-lg p-4 mb-5">
             <div className="flex items-center gap-2 mb-2">
               <MapPin className="w-4 h-4 text-[var(--brand)]" />
               <p className="text-sm font-semibold">Shipping Address</p>
             </div>
-            <p className="text-sm">{order.shippingFullName}</p>
+            <p className="text-sm">{orderData.shippingFullName}</p>
             <p className="text-sm text-muted-foreground">
-              {order.shippingAddress}, {order.shippingCity}
-              {order.shippingPostalCode ? `, ${order.shippingPostalCode}` : ""}, {order.shippingCountry}
+              {orderData.shippingAddress}, {orderData.shippingCity}
+              {orderData.shippingPostalCode ? `, ${orderData.shippingPostalCode}` : ""}, {orderData.shippingCountry}
             </p>
-            <p className="text-sm text-muted-foreground">{order.shippingPhone}</p>
+            <p className="text-sm text-muted-foreground">{orderData.shippingPhone}</p>
           </div>
 
           <div className="space-y-3 mb-5">
@@ -183,17 +214,17 @@ export default function OrderConfirmation() {
           <div className="border-t border-border pt-4 space-y-1.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatPrice(order.subtotal)}</span>
+              <span>{formatPrice(orderData.subtotal)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shipping</span>
-              <span className={parseFloat(order.shippingCost) === 0 ? "text-green-600" : ""}>
-                {parseFloat(order.shippingCost) === 0 ? "Free" : formatPrice(order.shippingCost)}
+              <span className={parseFloat(orderData.shippingCost) === 0 ? "text-green-600" : ""}>
+                {parseFloat(orderData.shippingCost) === 0 ? "Free" : formatPrice(orderData.shippingCost)}
               </span>
             </div>
             <div className="flex justify-between font-display font-bold text-base pt-1 border-t border-border">
               <span>Total</span>
-              <span>{formatPrice(order.total)}</span>
+              <span>{formatPrice(orderData.total)}</span>
             </div>
           </div>
         </div>

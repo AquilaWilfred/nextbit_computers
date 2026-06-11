@@ -22,7 +22,14 @@ def main():
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             # Create a lightweight user record for dev if missing
-            user = User(id=user_id, email=f"tech{user_id}@example.com", name=f"Tech {user_id}", password=None, phone="0712000000")
+            user = User(
+                id=user_id,
+                email=f"tech{user_id}@example.com",
+                name=f"Tech {user_id}",
+                password=None,
+                phone="0712000000",
+                createdAt=datetime.utcnow(),
+            )
             db.add(user)
             db.commit()
             print(f"Created user id={user_id}")

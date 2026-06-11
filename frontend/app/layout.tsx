@@ -6,7 +6,6 @@ import { CartSyncProvider } from "@/components/CartSyncContext";
 import { AuthProvider } from "@/components/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
 import CompareWidget from "@/components/CompareWidget";
-import AIChatBox from "@/components/ai/AIChatBox";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,8 +33,7 @@ export default function RootLayout({
         <ThemeProvider switchable={true}>
           <CartSyncProvider>
             <AuthProvider>
-            {children}
-            <AIChatBox />
+              {children}
             </AuthProvider>
             <Toaster />
             <CompareWidget />

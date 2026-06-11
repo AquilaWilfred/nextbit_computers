@@ -29,6 +29,9 @@ class UserResponse(BaseModel):
     name: str
     role: str = "user"
     is_verified: bool
+    phone: Optional[str] = None
+    createdAt: Optional[datetime] = None
+    lastSignedIn: Optional[datetime] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -52,7 +55,32 @@ async def get_current_user_optional(
     # Direct email forwarded by Axum gateway after JWT verification
     gateway_email = request.headers.get("x-user-email")
     if gateway_email:
-        return db.query(User).filter(User.email == gateway_email).first()
+        user = db.query(User).filter(User.email == gateway_email).first()
+        try:
+            # Update lastSignedIn/updatedAt on first authenticated request after login
+            from datetime import datetime as _dt
+            if user:
+                should_update = False
+                if not user.lastSignedIn:
+                    should_update = True
+                else:
+                    try:
+                        delta = (_dt.utcnow() - user.lastSignedIn).total_seconds()
+                        # Avoid updating on every proxied request; only update if more than 5 minutes
+                        if delta > 300:
+                            should_update = True
+                    except Exception:
+                        should_update = True
+
+                if should_update:
+                    user.lastSignedIn = _dt.utcnow()
+                    user.updatedAt = _dt.utcnow()
+                    db.commit()
+                    db.refresh(user)
+        except Exception:
+            # Don't fail authentication if DB update fails; log elsewhere if needed
+            pass
+        return user
 
     token = request.cookies.get("nextbit_token")
     
@@ -71,8 +99,32 @@ async def get_current_user_optional(
     email = verify_token(token)
     if not email:
         return None
-    
-    return db.query(User).filter(User.email == email).first()
+
+    user = db.query(User).filter(User.email == email).first()
+    try:
+        # Update lastSignedIn/updatedAt on token-based authentication if older than threshold
+        from datetime import datetime as _dt
+        if user:
+            should_update = False
+            if not user.lastSignedIn:
+                should_update = True
+            else:
+                try:
+                    delta = (_dt.utcnow() - user.lastSignedIn).total_seconds()
+                    if delta > 300:
+                        should_update = True
+                except Exception:
+                    should_update = True
+
+            if should_update:
+                user.lastSignedIn = _dt.utcnow()
+                user.updatedAt = _dt.utcnow()
+                db.commit()
+                db.refresh(user)
+    except Exception:
+        pass
+
+    return user
 
 
 def require_role(roles: Sequence[str]):
@@ -89,6 +141,13 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
     if not user or not verify_password(request.password, user.password or ""):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
+    user.lastSignedIn = datetime.utcnow()
+    user.updatedAt = datetime.utcnow()
+    if not user.createdAt:
+        user.createdAt = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+
     access_token = create_access_token(data={"sub": user.email})
     
     # HttpOnly cookie — JS cannot read this
@@ -113,8 +172,16 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
     
     return TokenResponse(
         access_token=access_token,  # still return for backward compat
-        user=UserResponse(id=user.id, email=user.email, name=user.name, 
-                         role=user.role, is_verified=user.emailVerified)
+        user=UserResponse(
+            id=user.id,
+            email=user.email,
+            name=user.name,
+            role=user.role,
+            is_verified=user.emailVerified,
+            phone=user.phone,
+            createdAt=user.createdAt,
+            lastSignedIn=user.lastSignedIn,
+        )
     )
 
 @router.post("/register", response_model=TokenResponse)
@@ -131,6 +198,7 @@ async def register(request: RegisterRequest, response: Response, db: Session = D
         openId=str(uuid.uuid4()),
         loginMethod="email",
         emailVerified=False,
+        createdAt=datetime.utcnow(),
         updatedAt=datetime.utcnow(),
         lastSignedIn=datetime.utcnow(),
     )
@@ -160,7 +228,16 @@ async def register(request: RegisterRequest, response: Response, db: Session = D
 
     return TokenResponse(
         access_token=access_token,
-        user=UserResponse(id=new_user.id, email=new_user.email, name=new_user.name, role=new_user.role, is_verified=new_user.emailVerified)
+        user=UserResponse(
+            id=new_user.id,
+            email=new_user.email,
+            name=new_user.name,
+            role=new_user.role,
+            is_verified=new_user.emailVerified,
+            phone=new_user.phone,
+            createdAt=new_user.createdAt,
+            lastSignedIn=new_user.lastSignedIn,
+        )
     )
 
 
@@ -201,6 +278,9 @@ async def get_me(
         name=current_user.name,
         role=current_user.role,
         is_verified=current_user.emailVerified,
+        phone=current_user.phone,
+        createdAt=current_user.createdAt,
+        lastSignedIn=current_user.lastSignedIn,
     )
     # Attach b2b info if approved
     data = result.dict() if hasattr(result, "dict") else result.__dict__

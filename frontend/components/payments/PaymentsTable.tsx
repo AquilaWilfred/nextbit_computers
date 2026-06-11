@@ -17,7 +17,7 @@ import { PaymentRow } from "./PaymentRow";
 import { SortConfig } from "@/types/orders.types";
 
 interface PaymentsTableProps {
-  payments: Payment[];
+  payments: (Payment & { escrowState?: string })[];
   isLoading: boolean;
   sortConfig: SortConfig;
   page: number;
@@ -29,7 +29,7 @@ interface PaymentsTableProps {
   onSort: (key: string) => void;
   onPageChange: (page: number) => void;
   onItemsPerPageChange: (value: number) => void;
-  onViewPayment: (payment: Payment) => void;
+  onViewPayment: (payment: Payment & { escrowState?: string }) => void;
 }
 
 export const PaymentsTable = memo(function PaymentsTable({
@@ -55,6 +55,9 @@ export const PaymentsTable = memo(function PaymentsTable({
     );
   }
 
+  // Check if any payment has escrow state
+  const hasEscrowState = payments.some((p) => p.escrowState);
+
   return (
     <Card className="p-6">
       <div className="overflow-x-auto">
@@ -72,13 +75,16 @@ export const PaymentsTable = memo(function PaymentsTable({
                   </div>
                 </th>
               ))}
+              {hasEscrowState && (
+                <th className="text-left py-3 px-4 font-semibold">Escrow State</th>
+              )}
               <th className="text-center py-3 px-4 font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {payments.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 px-4 text-center text-muted-foreground">
+                <td colSpan={hasEscrowState ? 8 : 7} className="py-8 px-4 text-center text-muted-foreground">
                   No payments found
                 </td>
               </tr>

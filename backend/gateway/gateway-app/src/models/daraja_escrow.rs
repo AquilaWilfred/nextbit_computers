@@ -90,7 +90,8 @@ pub struct DarajaEscrowRecord {
 /// Buyer initiates payment via STK push
 #[derive(Debug, Deserialize)]
 pub struct DarajaPaymentRequest {
-    pub buyer_phone:  String,     // 07XXXXXXXX or 2547XXXXXXXX — normalised internally
+    // Optional override — if omitted, server will use authenticated user's phone
+    pub buyer_phone:  Option<String>, // 07XXXXXXXX or 2547XXXXXXXX — normalised internally
     pub escrow_id:    Uuid,
 }
 

@@ -22,7 +22,7 @@ export function useTradeInForm() {
       toast.error('Please enter the model');
       return false;
     }
-    if (!formData.asking_price_kes || formData.asking_price_kes < 50) {
+    if (!formData.asking_price_kes || formData.asking_price_kes < 0) {
       toast.error('Enter a valid asking price in KES (minimum 50)');
       return false;
     }

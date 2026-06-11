@@ -8,7 +8,7 @@ import { useTradeInListings } from '@/hooks/listings/useTradeInListings';
 import { useTradeInStats } from '@/hooks/listings/useTradeInStats';
 import { useTradeInForm } from '@/hooks/listings/useTradeInForm';
 import { useImageUpload } from '@/hooks/listings/useImageUpload';
-import { tradeInService } from '@/lib/services/listing.service';
+import { tradeInService } from '@/lib/services/listings/listing.service';
 import { 
   TradeInHeader, 
   TradeInStats, 

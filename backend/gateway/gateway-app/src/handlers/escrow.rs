@@ -45,12 +45,13 @@ pub async fn create_escrow(
     };
 
     let currency = body.currency.unwrap_or_else(|| "KES".to_string());
+    let seller_id = body.seller_id;
 
     match escrow_svc::create_escrow(
         &app.pg,
         body.order_id,
         buyer_id,
-        body.seller_id,
+        seller_id,
         body.amount,
         currency,
     )

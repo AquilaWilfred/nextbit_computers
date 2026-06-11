@@ -997,6 +997,7 @@ async def _activate_company_account(app_id: str, email: str):
                 openId=str(uuid4()),
                 loginMethod="email",
                 emailVerified=True,
+                createdAt=datetime.utcnow(),
                 updatedAt=datetime.utcnow(),
                 lastSignedIn=datetime.utcnow(),
             )

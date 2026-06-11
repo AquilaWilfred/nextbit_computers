@@ -103,7 +103,9 @@ pub struct EscrowAuditLog {
 // ── Request / Response DTOs ────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "camelCase")]
 pub struct CreateEscrowRequest {
+    #[serde(alias = "order_id")]
     pub order_id:  Uuid,
     pub seller_id: Uuid,
     pub amount:    f64,

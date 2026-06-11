@@ -38,6 +38,8 @@ SETTINGS = {
         "tiktok": None,
     },
     "shipping": {
+        "standardFee": 1,
+        "expressDelivery": 100,
         "freeShippingThreshold": 50000,
     },
 

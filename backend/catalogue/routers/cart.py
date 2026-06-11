@@ -26,6 +26,9 @@ class CartItemResponse(BaseModel):
     product_stock: int
     product_brand: str | None
 
+class SyncCartRequest(BaseModel):
+    items: List[CartItemRequest]
+
 def _resolve_listing_cart_item(db: Session, listing_id: int) -> dict:
     listing = db.query(TradeInListing).filter(TradeInListing.id == listing_id).first()
     if not listing:
@@ -105,6 +108,22 @@ async def remove_from_cart(item_id: int, current_user: User = Depends(get_curren
     db.delete(item)
     db.commit()
     return {"message": "Removed from cart"}
+
+@router.post("/sync")
+async def sync_cart(request: SyncCartRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Add or update each item without clearing the whole cart
+    for item in request.items:
+        existing = db.query(CartItem).filter(
+            CartItem.user_id == current_user.id,
+            CartItem.product_id == item.product_id
+        ).first()
+        if existing:
+            existing.quantity += item.quantity
+        else:
+            db.add(CartItem(user_id=current_user.id, product_id=item.product_id, quantity=item.quantity))
+    db.commit()
+    return {"message": "Cart synced"}
+
 
 @router.post("/sync-from-guest")
 async def sync_from_guest(items: List[CartItemRequest], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):

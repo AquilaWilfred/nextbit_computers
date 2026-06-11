@@ -186,9 +186,11 @@ async def admin_get_order(order_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Order not found")
     items = db.execute(text("""
         SELECT oi.id, oi."productId" AS product_id, p.name AS product_name,
-               oi.quantity, oi."unitPrice" AS unit_price
+               oi."listingId" AS listing_id, l.brand AS listing_brand,
+               l.model AS listing_model, oi.quantity, oi."unitPrice" AS unit_price
         FROM order_items oi
         LEFT JOIN products p ON p.id = oi."productId"
+        LEFT JOIN trade_in_listings l ON l.id = oi."listingId"
         WHERE oi."orderId" = :id
     """), {"id": order_id}).fetchall()
     result = {
@@ -203,8 +205,10 @@ async def admin_get_order(order_id: int, db: Session = Depends(get_db)):
         "items": [
             {
                 "id": i.id,
-                "productId": i.product_id,
-                "productName": i.product_name,
+                "productId": i.product_id or (1000000000 + i.listing_id if i.listing_id else None),
+                "productName": i.product_name or (
+                    f"{i.listing_brand} {i.listing_model} (Used)" if i.listing_brand and i.listing_model else "Unknown"
+                ),
                 "quantity": i.quantity,
                 "unitPrice": float(i.unit_price) if i.unit_price else 0,
             }

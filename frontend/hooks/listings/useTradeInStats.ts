@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { UserStats } from '@/types/listings/listings.types';
-import { tradeInService } from '@/lib/services/listing.service';
+import { tradeInService } from '@/lib/services/listings/listing.service';
 import { toast } from 'sonner';
 
 export function useTradeInStats() {

@@ -48,3 +48,6 @@ pub struct Config {
 ```bash
 sqlx migrate run --database-url $DATABASE_URL
 ```
+
+
+curl -i -X POST http://127.0.0.1:3000/api/checkout/mpesa/initiate -H 'Content-Type: application/json' -d '{"orderId":"123","amount":"100","currency":"KES","buyerPhone":"+254724704865"}'

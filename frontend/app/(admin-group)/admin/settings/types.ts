@@ -263,9 +263,9 @@ export const PAYMENT_DEFAULTS: PaymentSettings = {
 };
 
 export const SHIPPING_DEFAULTS: ShippingSettings = {
-  standardFee: "50.00",
-  expressDelivery: "100.00",
-  freeShippingThreshold: "50000.00",
+  standardFee: "1.00",
+  expressDelivery: "2.00",
+  freeShippingThreshold: "5.00",
 };
 
 export const EMAIL_DEFAULTS: EmailSettings = {

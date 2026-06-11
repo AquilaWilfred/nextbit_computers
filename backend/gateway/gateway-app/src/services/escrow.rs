@@ -291,3 +291,32 @@ pub async fn get_user_id_by_email(
         other => EscrowError::Database(other),
     })
 }
+
+// ── Look up user's phone by openId ────────────────────────────────────────────
+pub async fn get_user_phone_by_id(
+    pool:    &PgPool,
+    user_id: Uuid,
+) -> Result<String, EscrowError> {
+    sqlx::query_scalar::<_, String>(
+        r#"SELECT phone FROM users WHERE "openId" = $1"#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::RowNotFound => EscrowError::Flutterwave(
+            format!("Phone not found for user: {}", user_id)
+        ),
+        other => EscrowError::Database(other),
+    })
+}
+
+// ── Look up seller UUID from order ────────────────────────────────────────────
+// Orders table has no seller column — seller_id comes from the frontend payload.
+// This function exists for future use when seller is stored on the order.
+pub async fn get_seller_id_by_order(
+    _pool:    &PgPool,
+    order_id: Uuid,
+) -> Result<Uuid, EscrowError> {
+    Err(EscrowError::NotFound(order_id))
+}

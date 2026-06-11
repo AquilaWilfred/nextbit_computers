@@ -35,8 +35,8 @@ export function usePayments() {
 
   // WebSocket for real-time updates
   useEffect(() => {
-    const wsPort = process.env.NEXT_PUBLIC_WS_PORT ?? "8001";
-    const wsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${wsPort}/api/ws/admin/stats`;
+    const wsBase = process.env.NEXT_PUBLIC_WS_URL ?? `ws://127.0.0.1:8080`;
+    const wsUrl = `${wsBase.replace(/\/$/, "")}/api/ws/admin/stats`;
     
     try {
       wsRef.current = new WebSocket(wsUrl);

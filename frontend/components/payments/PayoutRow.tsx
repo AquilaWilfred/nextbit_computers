@@ -4,8 +4,7 @@ import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Check, X } from "lucide-react";
 import { PayoutRequest } from "@/types/pay.types";
-import { PAYOUT_STATUS_COLORS } from "@/constants/pay.constants";
-import { formatAmount, formatDateTime } from "@/lib/utils/pay.utils";
+import { formatAmount, formatDateTime, getPayoutStatusColor } from "@/lib/utils/pay.utils";
 
 interface PayoutRowProps {
   payout: PayoutRequest;
@@ -35,7 +34,7 @@ export const PayoutRow = memo(function PayoutRow({
       </td>
       <td className="py-3 px-4">{formatDateTime(payout.requestedAt)}</td>
       <td className="py-3 px-4">
-        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${PAYOUT_STATUS_COLORS[payout.status]}`}>
+        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getPayoutStatusColor(payout.status)}`}>
           {payout.status}
         </span>
       </td>

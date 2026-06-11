@@ -1,5 +1,6 @@
 // hooks/useTechnicianCheck.ts
 import { useState, useEffect } from "react";
+import { proxyClient } from "@/lib/api-client";
 
 export function useTechnicianCheck(user: any) {
   const [showApplication, setShowApplication] = useState(false);
@@ -10,14 +11,20 @@ export function useTechnicianCheck(user: any) {
     const checkTechnicianStatus = async () => {
       if (user?.id) {
         try {
-          const response = await fetch(`/api/technician/profile?user_id=${user.id}`);
-          if (response.status === 404) {
+          const response = await proxyClient.get<any>(`/api/technician/profile?user_id=${user.id}`);
+          if (!response) {
             setPendingUserId(user.id);
             setPendingUserEmail(user.email || "");
             setShowApplication(true);
           }
-        } catch (error) {
-          console.error("Failed to check technician status", error);
+        } catch (error: any) {
+          if (error.message?.includes("404")) {
+            setPendingUserId(user.id);
+            setPendingUserEmail(user.email || "");
+            setShowApplication(true);
+          } else {
+            console.error("Failed to check technician status", error);
+          }
         }
       }
     };

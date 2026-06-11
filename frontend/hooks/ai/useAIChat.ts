@@ -1,125 +1,135 @@
-// hooks/useAIChat.ts
-import { useState, useRef, useCallback } from "react";
-import { toast } from "sonner";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { aiService } from "@/lib/services/navbar/ai.service";
+import { AiHistoryEntry, ChatMessage } from "@/types/navbar/navbar.types";
+import { CUSTOMER_SUGGESTED_PROMPTS } from "@/constants/navbar/navbar.constants";
 
-export interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string; // CHANGED: string instead of Date
-  type?: "text" | "suggestion" | "error";
-}
+export function useAIChat(isAuthenticated: boolean, cartContext: any[]) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
+  const [streamingIndex, setStreamingIndex] = useState<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
 
-// Helper function to get consistent timestamp
-function getFormattedTimestamp(): string {
-  const now = new Date();
-  return now.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+  // Load saved state
+  useEffect(() => {
+    try {
+      setIsOpen(sessionStorage.getItem("store_ai_open") === "true");
+      const saved = sessionStorage.getItem("store_ai_messages");
+      if (saved) setMessages(JSON.parse(saved));
+    } catch {}
+  }, []);
 
-// Helper to create a new message
-function createMessage(
-  id: string,
-  role: "user" | "assistant",
-  content: string,
-  type?: "text" | "suggestion" | "error"
-): Message {
-  return {
-    id,
-    role,
-    content,
-    timestamp: getFormattedTimestamp(),
-    type,
+  // Load history
+  useEffect(() => {
+    if (!isAuthenticated || !isOpen) return;
+    aiService.getHistory().then((history: AiHistoryEntry[]) => {
+      if (history?.length && messages.length <= 1) {
+        setMessages(history.map((h) => ({
+          role: (h.role === "assistant" ? "assistant" : "user") as "user" | "assistant",
+          content: h.message,
+        })).reverse());
+      }
+    }).catch(() => {});
+  }, [isAuthenticated, isOpen]);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  useEffect(() => {
+    if (streamingIndex !== null) {
+      const interval = setInterval(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [streamingIndex]);
+
+  // Persist state
+  useEffect(() => {
+    try { sessionStorage.setItem("store_ai_open", String(isOpen)); } catch {}
+  }, [isOpen]);
+
+  useEffect(() => {
+    try { sessionStorage.setItem("store_ai_messages", JSON.stringify(messages)); } catch {}
+  }, [messages]);
+
+  type AiChatResponse = {
+    reply: string;
+    products?: any[];
+    suggestions?: string[];
   };
-}
 
-export function useAIChat() {
-  const [messages, setMessages] = useState<Message[]>([
-    createMessage(
-      "1",
-      "assistant",
-      "Hello! I'm your NextBit AI assistant. I can help you with product recommendations, order tracking, technical support, and more. How can I assist you today?",
-      "text"
-    ),
-  ]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
-  const messageIdRef = useRef(2);
+  const sendMessage = useCallback(async (userMessage: string) => {
+    if (!userMessage.trim() || isPending) return;
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading) return;
-
-    const userMessage = createMessage(
-      (messageIdRef.current++).toString(),
-      "user",
-      content.trim(),
-      "text"
-    );
-
-    setMessages(prev => [...prev, userMessage]);
-    setIsLoading(true);
+    const newMessages: ChatMessage[] = [
+      ...messages,
+      { role: "user" as const, content: userMessage },
+    ];
+    setMessages(newMessages);
+    setInput("");
+    setDynamicSuggestions([]);
+    setIsPending(true);
 
     try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMessage.content,
-          context: messages.slice(-5),
-        }),
-      });
+      const data = await aiService.sendMessage(
+        userMessage,
+        newMessages.slice(1),
+        cartContext,
+        user?.id,
+        user?.email
+      ) as AiChatResponse;
 
-      if (!response.ok) throw new Error("Failed to get AI response");
-
-      const data = await response.json();
-
-      const aiMessage = createMessage(
-        (messageIdRef.current++).toString(),
-        "assistant",
-        data.response,
-        "text"
-      );
-
-      setMessages(prev => [...prev, aiMessage]);
-    } catch (error) {
-      const errorMessage = createMessage(
-        (messageIdRef.current++).toString(),
-        "assistant",
-        "I'm sorry, I'm having trouble connecting right now. Please try again later or contact our support team.",
-        "error"
-      );
-      setMessages(prev => [...prev, errorMessage]);
-      toast.error("Failed to send message");
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant" as const,
+          content: data.reply,
+          products: data.products,
+        },
+      ]);
+      setStreamingIndex(newMessages.length);
+    } catch (err: any) {
+      const isQuota = err.message?.includes("quota") || err.message?.includes("429");
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant" as const,
+          content: isQuota
+            ? "The AI is currently unavailable due to high traffic. Please try again later."
+            : "Sorry, I ran into a network error. Please try again.",
+        },
+      ]);
     } finally {
-      setIsLoading(false);
+      setIsPending(false);
     }
-  }, [isLoading, messages]);
+  }, [messages, isPending, cartContext, user]);
 
-  const clearChat = useCallback(() => {
-    messageIdRef.current = 2;
-    setMessages([
-      createMessage(
-        "1",
-        "assistant",
-        "Hello! I'm your NextBit AI assistant. How can I help you today?",
-        "text"
-      ),
-    ]);
-  }, []);
-
-  const toggleMinimize = useCallback(() => {
-    setIsMinimized(prev => !prev);
-  }, []);
+  const newChat = () => {
+    const displayName = user?.name ? `, ${user.name}` : " there";
+    setMessages([{ role: "assistant" as const, content: `Hi${displayName}! I'm Bit, NextBit's shopping assistant. What are you looking for today?` }]);
+    setInput("");
+    if (isAuthenticated) aiService.clearHistory().catch(() => {});
+  };
 
   return {
+    isOpen,
+    setIsOpen,
     messages,
-    isLoading,
-    isMinimized,
+    input,
+    setInput,
+    isPending,
+    dynamicSuggestions,
+    streamingIndex,
+    scrollRef,
     sendMessage,
-    clearChat,
-    toggleMinimize,
-    setIsMinimized,
+    newChat,
+    setStreamingIndex,
   };
 }

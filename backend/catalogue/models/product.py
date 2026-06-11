@@ -19,6 +19,7 @@ class Product(Base):
     category_id = Column("categoryId", Integer, ForeignKey("categories.id"))
     brand = Column("brand", String)
     stock_quantity = Column("stock", Integer, default=0)
+    seller_openid  = Column("seller_openid", String(64), nullable=True)
     sku = Column(String)
     specifications = Column(JSON)
     tags = Column(JSON)

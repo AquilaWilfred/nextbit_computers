@@ -4,6 +4,8 @@ from sqlalchemy.sql import func
 from db.postgres import Base
 import enum
 
+from models.listings.tradein import TradeInListing
+
 class OrderStatus(enum.Enum):
     pending = "pending"
     confirmed = "confirmed"
@@ -84,9 +86,11 @@ class OrderItem(Base):
 
     id         = Column(Integer, primary_key=True, index=True)
     order_id   = Column("orderId", Integer, ForeignKey("orders.id"), nullable=False)
-    product_id = Column("productId", Integer, ForeignKey("products.id"), nullable=False)
+    product_id = Column("productId", Integer, ForeignKey("products.id"), nullable=True)
+    listing_id = Column("listingId", Integer, ForeignKey("trade_in_listings.id"), nullable=True)
     quantity   = Column(Integer, nullable=False)
     unit_price = Column("unitPrice", Numeric(10, 2), nullable=False)
 
     order   = relationship("Order", back_populates="items")
     product = relationship("Product")
+    listing = relationship("TradeInListing", foreign_keys=[listing_id])

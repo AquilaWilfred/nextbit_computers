@@ -38,3 +38,4 @@ export const API_ENDPOINTS = {
 } as const;
 
 export const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT;
+export const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? `ws://127.0.0.1:8080`;

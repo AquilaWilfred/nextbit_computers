@@ -5,7 +5,7 @@
 //   • Admin: trigger payout / refund after ruling
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Extension},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 use crate::state::AppState;
 use crate::models::daraja_escrow::{DarajaError, DarajaPaymentRequest};
+use crate::models::Claims;
 use crate::daraja::c2b::{
     StkCallback, C2bConfirmation, ValidationResponse,
 };
@@ -48,22 +49,36 @@ impl IntoResponse for DarajaError {
 // ── 1. Buyer Initiates STK Push ────────────────────────────────────────────────
 // POST /api/escrow/:escrow_id/daraja/pay
 //
-// Body: { "buyer_phone": "0712345678" }
+// Body: { "buyer_phone": "0712345678" } or omit buyer_phone to use authenticated user's profile phone.
 // Extracts buyer_id from JWT in middleware (same pattern as existing escrow handlers).
 
 pub async fn initiate_daraja_payment(
     State(state):  State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
     Path(escrow_id): Path<Uuid>,
-    // In production: extract buyer_id from JWT claims via your existing auth middleware
-    // For now, accept it in the request body to mirror the existing escrow pattern
     Json(req): Json<DarajaPaymentRequest>,
 ) -> Result<impl IntoResponse, DarajaError> {
+    // Resolve buyer UUID from JWT subject
+    let buyer_id = match crate::services::escrow::get_user_id_by_email(&state.pg, &claims.sub).await {
+        Ok(id) => id,
+        Err(e) => return Err(DarajaError::Http(e.to_string())),
+    };
+
+    // Determine buyer phone: prefer client override, otherwise fetch from user profile
+    let buyer_phone = match req.buyer_phone {
+        Some(p) => p,
+        None => match crate::services::escrow::get_user_phone_by_id(&state.pg, buyer_id).await {
+            Ok(p) => p,
+            Err(e) => return Err(DarajaError::Http(e.to_string())),
+        },
+    };
+
     let result = stk_push_payment(
         &state.pg,
         &state.daraja,
         escrow_id,
-        req.escrow_id,      // buyer_id — comes from JWT in prod
-        &req.buyer_phone,
+        buyer_id,
+        &buyer_phone,
     )
     .await?;
 

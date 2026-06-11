@@ -2,15 +2,13 @@
 
 import { memo } from "react";
 import { Order } from "@/types/orders.types";
-import { OrderStatusSelect } from "./OrderStatusSelect";
 import { OrderActionButtons } from "./OrderActionButtons";
-import { formatDate } from "@/lib/utils/order.utils";
+import { formatDate, formatStatus } from "@/lib/utils/order.utils";
 import { formatPrice } from "@/lib/cart";
 
 interface OrderRowProps {
   order: Order;
   isUpdating: boolean;
-  onStatusChange: (status: string) => void;
   onView: () => void;
   onInvoice: () => void;
   onTracking: () => void;
@@ -19,7 +17,6 @@ interface OrderRowProps {
 export const OrderRow = memo(function OrderRow({
   order,
   isUpdating,
-  onStatusChange,
   onView,
   onInvoice,
   onTracking,
@@ -30,7 +27,9 @@ export const OrderRow = memo(function OrderRow({
       <td className="py-3 px-4">{order.shippingFullName}</td>
       <td className="py-3 px-4">{formatDate(order.createdAt)}</td>
       <td className="py-3 px-4">
-        <OrderStatusSelect value={order.status} onChange={onStatusChange} disabled={isUpdating} />
+        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-900 dark:bg-slate-800 dark:text-slate-100">
+          {formatStatus(order.status)}
+        </span>
       </td>
       <td className="py-3 px-4 text-right font-semibold">{formatPrice(order.total)}</td>
       <td className="py-3 px-4">

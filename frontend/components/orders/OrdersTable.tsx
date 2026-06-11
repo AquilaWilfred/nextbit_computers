@@ -13,7 +13,6 @@ interface OrdersTableProps {
   sortConfig: SortConfig;
   updatingOrderId: number | null;
   onSort: (key: string) => void;
-  onStatusChange: (orderId: number, status: string) => void;
   onView: (order: Order) => void;
   onInvoice: (orderId: number) => void;
   onTracking: (order: Order) => void;
@@ -75,7 +74,6 @@ export const OrdersTable = memo(function OrdersTable({
                   key={order.id}
                   order={order}
                   isUpdating={updatingOrderId === order.id}
-                  onStatusChange={(status) => onStatusChange(order.id, status)}
                   onView={() => onView(order)}
                   onInvoice={() => onInvoice(order.id)}
                   onTracking={() => onTracking(order)}

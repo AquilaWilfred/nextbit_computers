@@ -14,7 +14,7 @@ class User(Base):
     loginMethod = Column("loginMethod", String, nullable=True)
     emailVerified = Column("emailVerified", Boolean, default=False)
     createdAt = Column("createdAt", DateTime, server_default=func.now())
-    updatedAt = Column("updatedAt", DateTime, onupdate=func.now())
+    updatedAt = Column("updatedAt", DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
     lastSignedIn = Column("lastSignedIn", DateTime, nullable=True)
 
     # Aliases for catalogue code compatibility

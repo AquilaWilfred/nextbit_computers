@@ -20,7 +20,7 @@ export default function AdminOrdersPage() {
   const [assignAgentId, setAssignAgentId] = useState("");
 
   const { searchTerm, setSearchTerm, debouncedSearch, statusFilter, setStatusFilter, page, setPage, itemsPerPage, setItemsPerPage, resetFilters } = useOrderFilters();
-  const { orders, isLoading, updateOrderOptimistically, refetch } = useOrders(debouncedSearch, statusFilter);
+  const { orders, isLoading, refetch } = useOrders(debouncedSearch, statusFilter);
   const { sortConfig, sortedOrders, handleSort } = useOrderSort(orders);
   const { updatingOrderId, assigningDelivery, updateStatus, assignDelivery, updateTracking } = useOrderActions(refetch);
   const { agents } = useAgents();
@@ -35,11 +35,6 @@ export default function AdminOrdersPage() {
   const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
   const startIndex = (page - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-
-  const handleStatusChange = (orderId: number, newStatus: string) => {
-    updateStatus(orderId, newStatus);
-    updateOrderOptimistically(orderId, { status: newStatus });
-  };
 
   const handleAssignDelivery = async () => {
     if (!selectedOrder || !assignAgentId) return;
@@ -72,7 +67,6 @@ export default function AdminOrdersPage() {
           sortConfig={sortConfig}
           updatingOrderId={updatingOrderId}
           onSort={handleSort}
-          onStatusChange={handleStatusChange}
           onView={setSelectedOrder}
           onInvoice={generateInvoice}
           onTracking={updateTracking}
