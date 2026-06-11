@@ -8,9 +8,9 @@ const GATEWAY = process.env.AXUM_GATEWAY_URL ?? process.env.NEXT_PUBLIC_GATEWAY_
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const escrowId = params.id;
+  const { id: escrowId } = await params;
 
   const body = await request.json().catch(() => ({}));
   const sellerPhone = body.seller_phone ?? body.sellerPhone;

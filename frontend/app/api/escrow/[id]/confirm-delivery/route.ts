@@ -8,14 +8,14 @@ const GATEWAY = process.env.AXUM_GATEWAY_URL ?? process.env.NEXT_PUBLIC_GATEWAY_
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }  // ← add Promise<> here
 ) {
-  const escrowId = params.id;
+  const { id } = await params;  // ← destructure cleanly
 
   const headers = new Headers(request.headers);
   headers.delete("host");
 
-  const res = await fetch(`${GATEWAY}/api/escrow/${escrowId}/confirm-delivery`, {
+  const res = await fetch(`${GATEWAY}/api/escrow/${id}/confirm-delivery`, {
     method: "POST",
     headers,
   });

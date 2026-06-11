@@ -3,8 +3,8 @@ import { proxyToGateway } from "@/lib/proxy";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const escrowId = params.id;
+  const { id: escrowId } = await params;
   return proxyToGateway(request, `/api/escrow/${escrowId}`);
 }
