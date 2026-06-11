@@ -26,12 +26,7 @@ use state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenvy::from_path(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join(".env")
-    ).expect("Failed to load .env");
+    dotenvy::dotenv().ok(); // .env optional in production
 
     tracing_subscriber::fmt()
         .with_env_filter(
