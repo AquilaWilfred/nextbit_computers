@@ -58,6 +58,13 @@ async fn main() -> Result<()> {
     }).await?;
     info!("Redis connected");
 
+    // Build allowed origins from env
+    let allowed_origins: Vec<HeaderValue> = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string())
+        .split(',')
+        .map(|o| o.trim().parse::<HeaderValue>().expect("Invalid origin in ALLOWED_ORIGINS"))
+        .collect();
+
     let catalogue_url = std::env::var("CATALOGUE_URL")
         .unwrap_or_else(|_| "http://localhost:8001".to_string());
     let ml_url = std::env::var("ML_URL")
@@ -208,7 +215,7 @@ async fn main() -> Result<()> {
         .with_state(state)
         .layer(
             CorsLayer::new()
-                .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+                .allow_origin(allowed_origins)
                 .allow_methods([
                     axum::http::Method::GET,
                     axum::http::Method::POST,
