@@ -47,7 +47,8 @@ export async function proxyToCatalogue(request: Request, upstreamPath?: string):
     }
   });
 
-  return new Response(res.body, {
+  const buffer = await res.arrayBuffer();
+  return new Response(buffer, {
     status: res.status,
     headers: resHeaders,
   });
@@ -103,7 +104,8 @@ export async function proxyToGateway(request: Request, upstreamPath?: string): P
     }
   });
 
-  return new Response(res.body, {
+  const buffer = await res.arrayBuffer();
+  return new Response(buffer, {
     status: res.status,
     headers: resHeaders,
   });
