@@ -40,7 +40,7 @@ export function useAuthActions({ onVerificationNeeded, onResetNeeded }: AuthActi
   const resendVerification = useMutation((data: any) => proxyClient.post("/api/auth/resend-verification", data));
   const verifyEmail = useMutation((data: any) => proxyClient.post("/api/auth/verify-email", data));
 
-  const handleLogin = useCallback(async (email: string, password: string): Promise<{ success: boolean; needsVerification?: boolean; email?: string }> => {
+  const handleLogin = useCallback(async (email: string, password: string): Promise<{ success: boolean; needsVerification?: boolean; email?: string; error?: string }> => {
     try {
       await login.mutate({ email, password });
       toast.success("Successfully logged in");
@@ -48,11 +48,11 @@ export function useAuthActions({ onVerificationNeeded, onResetNeeded }: AuthActi
       await refetchUser();
       return { success: true };
     } catch (err: any) {
-      toast.error(err.message || "Login failed");
+      // toast.error(err.message || "Login failed");
       if (err.message?.toLowerCase().includes("verify")) {
-        return { success: false, needsVerification: true, email };
+        return { success: false, needsVerification: true, email, error: err.message };
       }
-      return { success: false };
+      return { success: false, error: "Invalid email or password." };
     }
   }, [login, refetchUser]);
 

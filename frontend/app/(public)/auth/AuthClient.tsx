@@ -48,6 +48,7 @@ export default function AuthClient() {
   const claimOrderNumber = searchParams.get("claimOrder") || undefined;
 
   // UI State
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>(mode === "register" ? "register" : "login");
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [verificationData, setVerificationData] = useState<VerificationDataType | null>(null);
@@ -95,6 +96,7 @@ export default function AuthClient() {
 
     if (authMode === 'login') {
       const result = await handleLogin(form.email, form.password);
+      setLoginError(result.error || null);
       if (result.needsVerification && result.email) {
         setUnverifiedEmail(result.email);
         return;
@@ -102,6 +104,7 @@ export default function AuthClient() {
       if (result.success) {
         router.push(redirectUrl);
       }
+      setLoginError(result.error || "Invalid email or password.");
       return;
     }
 
@@ -182,12 +185,13 @@ export default function AuthClient() {
                 rememberMe={form.rememberMe}
                 showPassword={showPassword}
                 isLoading={isPending}
-                onEmailChange={(v) => updateField('email', v)}
-                onPasswordChange={(v) => updateField('password', v)}
+                onEmailChange={(v) => { updateField('email', v); setLoginError(null); }}
+                onPasswordChange={(v) => { updateField('password', v); setLoginError(null); }}
                 onRememberMeChange={(v) => updateField('rememberMe', v)}
                 onTogglePassword={() => setShowPassword(prev => !prev)}
                 onForgotPassword={() => setAuthMode('forgot-password')}
                 onSubmit={handleSubmit}
+                errorMessage={loginError}
               />
             ),
           };
