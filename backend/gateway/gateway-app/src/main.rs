@@ -24,6 +24,21 @@ use handlers::{alerts, assets, escrow as escrow_handlers, debug, device, health,
 use redis_helpers::with_redis;
 use state::AppState;
 
+use utoipa::OpenApi;
+use utoipa_scalar::{Scalar, Servable as ScalarServable};
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        // This links directly to the macro you just wrote!
+        handlers::health::health_handler, 
+    ),
+    tags(
+        (name = "System Diagnostics", description = "Core platform infrastructure health status checks")
+    )
+)]
+pub struct ApiDoc;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok(); // .env optional in production
@@ -189,7 +204,7 @@ async fn main() -> Result<()> {
         .route("/api/ml/hardware",                       post(proxy::ml_hardware))
         .route("/api/escrow",                            post(escrow_handlers::create_escrow))
         .route("/api/escrow/:id",                        get(escrow_handlers::get_escrow))
-        .route("/api/escrow/:id/initiate-payment", post(escrow_handlers::initiate_payment))
+        .route("/api/escrow/:id/initiate-payment",       post(escrow_handlers::initiate_payment))
         .route("/api/escrow/:id/confirm-delivery",       post(escrow_handlers::confirm_delivery))
         .route("/api/escrow/:id/dispute",                post(escrow_handlers::raise_dispute))
         .route("/api/escrow/:id/admin-ruling",           post(escrow_handlers::admin_ruling))
@@ -212,6 +227,11 @@ async fn main() -> Result<()> {
         .merge(public)
         .merge(protected)
         .merge(debug_routes)
+        .merge(
+            Router::<Arc<AppState>>::new().merge(
+                Scalar::with_url("/scalar", ApiDoc::openapi())
+            )
+        )
         .with_state(state)
         .layer(
             CorsLayer::new()
@@ -229,7 +249,10 @@ async fn main() -> Result<()> {
         )
         .layer(TraceLayer::new_for_http());
 
-    let port = std::env::var("GATEWAY_PORT").unwrap_or_else(|_| "8080".to_string());
+    // Render injects PORT dynamically; fall back to GATEWAY_PORT, then 8080 for local dev
+    let port = std::env::var("PORT")
+        .unwrap_or_else(|_| std::env::var("GATEWAY_PORT").unwrap_or_else(|_| "8080".to_string()));
+
     let addr = format!("0.0.0.0:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     info!("Gateway listening on {}", addr);

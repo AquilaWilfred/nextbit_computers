@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
+from scalar_fastapi import get_scalar_api_reference
 from routers import (
     auth, products, orders, cart, categories,
     settings, branches, addresses, wishlist,
@@ -19,6 +20,13 @@ from routers.b2b import router as b2b_router
 
 
 app = FastAPI(title="NEXTBIT Catalogue API", version="1.0.0", redirect_slashes=True)
+
+@app.get("/scalar", include_in_schema=False)
+async def scalar_html():
+    return get_scalar_api_reference(
+        openapi_url=app.openapi_url,
+        title="NextBit Core API Documentation",
+    )
 
 Base.metadata.create_all(bind=engine)
 

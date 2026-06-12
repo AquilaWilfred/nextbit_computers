@@ -3,7 +3,17 @@ use mongodb::bson::doc;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use crate::{redis_helpers::with_redis, state::AppState};
+use axum::response::IntoResponse;
+use axum::http::StatusCode;
 
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses(
+        (status = 200, description = "Application is healthy - NextBit Central Gateway Core Engine Online")
+    ),
+    tag = "System Diagnostics"
+)]
 pub async fn health_handler(State(state): State<Arc<AppState>>) -> Json<Value> {
     let pg_status = match sqlx::query("SELECT 1").execute(&state.pg).await {
         Ok(_) => "connected", Err(_) => "error",
