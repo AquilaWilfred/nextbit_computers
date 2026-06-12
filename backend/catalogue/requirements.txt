@@ -16,3 +16,4 @@ emails==0.6
 httpx==0.25.2
 email-validator>=2.2.0
 pydantic[email]
+scalar-fastapi>=1.0.3
