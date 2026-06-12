@@ -65,8 +65,8 @@ Escrow / Orders     ML Inference
 | **Production Web UI** | [https://nextbit-computers.vercel.app](https://nextbit-computers.vercel.app) | User-facing marketplace interface. |
 | **Axum Routing Gateway** | [https://nextbit-gateway.onrender.com](https://nextbit-gateway.onrender.com) | Core backend system root proxy. |
 | **FastAPI Core Catalogue** | [https://nextbit-catalogue.onrender.com](https://nextbit-catalogue.onrender.com) | Product data subsystem proxy root. |
-| **Catalogue API Docs** | [https://nextbit-catalogue.onrender.com/docs](https://nextbit-catalogue.onrender.com/docs) | Interactive Swagger UI for Python endpoints. |
-| **Gateway Swagger UI** | [https://nextbit-gateway.onrender.com/swagger-ui/](https://nextbit-gateway.onrender.com/swagger-ui/) | OpenAPI schema docs for Rust/Axum engine. |
+| **Catalogue API Docs** | [https://nextbit-catalogue.onrender.com/docs](https://nextbit-catalogue.onrender.com/scalar) | Interactive Swagger UI for Python endpoints. |
+| **Gateway Swagger UI** | [https://nextbit-gateway.onrender.com/swagger-ui/](https://nextbit-gateway.onrender.com/scalar) | OpenAPI schema docs for Rust/Axum engine. |
 
 ---
 
