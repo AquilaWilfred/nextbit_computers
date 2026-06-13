@@ -41,7 +41,7 @@ export async function proxyToCatalogue(request: Request, upstreamPath?: string):
     if (lower === 'set-cookie') {
       const rewritten = value.replace(/; domain=[^;]*/i, '').replace(/; secure/i, '');
       resHeaders.append('set-cookie', rewritten);
-    } else if (lower !== 'content-encoding' && lower !== 'transfer-encoding') {
+    } else if (lower !== 'content-encoding' && lower !== 'transfer-encoding' && lower !== 'content-length') {
       // ← drop encoding headers; body is already decoded by fetch()
       resHeaders.set(key, value);
     }
@@ -98,7 +98,7 @@ export async function proxyToGateway(request: Request, upstreamPath?: string): P
     if (lower === 'set-cookie') {
       const rewritten = value.replace(/; domain=[^;]*/i, '').replace(/; secure/i, '');
       resHeaders.append('set-cookie', rewritten);
-    } else if (lower !== 'content-encoding' && lower !== 'transfer-encoding') {
+    } else if (lower !== 'content-encoding' && lower !== 'transfer-encoding' && lower !== 'content-length') {
       // ← drop encoding headers; body is already decoded by fetch()
       resHeaders.set(key, value);
     }
