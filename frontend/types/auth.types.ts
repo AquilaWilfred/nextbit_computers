@@ -28,4 +28,5 @@ export interface FormState {
   confirmPassword: string;
   acceptTerms: boolean;
   rememberMe: boolean;
+  countryCode: string;
 }

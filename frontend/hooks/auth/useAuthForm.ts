@@ -7,23 +7,37 @@ import { formatPhone } from '@/lib/utils/phoneFormatter';
 const initialFormState: FormState = {
   firstName: "", lastName: "", surname: "", phone: "",
   email: "", password: "", confirmPassword: "",
-  acceptTerms: false, rememberMe: false,
+  acceptTerms: false, rememberMe: false, countryCode: '+254',
 };
 
 export function useAuthForm(prefillEmail: string = "") {
   const [form, setForm] = useState<FormState>({ ...initialFormState, email: prefillEmail });
   const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
 
   const updateField = useCallback((field: keyof FormState, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }));
-  }, []);
+    // Clear field error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  }, [fieldErrors]);
 
-  const updatePhone = useCallback((value: string) => {
-    setForm(prev => ({ ...prev, phone: formatPhone(value) }));
+  const updatePhone = useCallback((value: string, countryCode: string = '+254') => {
+    setForm(prev => ({ ...prev, phone: formatPhone(value, countryCode) }));
   }, []);
 
   const resetForm = useCallback(() => {
     setForm(initialFormState);
+    setFieldErrors({});
+  }, []);
+
+  const setFieldError = useCallback((field: string, error: string) => {
+    setFieldErrors(prev => ({ ...prev, [field]: error }));
   }, []);
 
   const validateRegistration = useCallback(() => {
@@ -43,10 +57,12 @@ export function useAuthForm(prefillEmail: string = "") {
   return {
     form,
     showPassword,
+    fieldErrors,
     updateField,
     updatePhone,
     setShowPassword,
     resetForm,
+    setFieldError,
     validateRegistration,
     getFullName,
   };

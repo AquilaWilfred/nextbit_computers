@@ -14,13 +14,20 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = True
     port: int = 8001
-
     database_url: str
     mongo_url: str
     redis_url: str
-
     gateway_url: str = "http://localhost:8080"
     internal_api_key: str = "nextbit_internal_secret_2026"
+    frontend_url: str = "https://nextbitcomputer.vercel.app"
+
+    # SMTP
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_from_name: str = "NextBit Computers"
 
     class Config:
         env_file = str(ROOT_ENV) if ROOT_ENV else ".env"

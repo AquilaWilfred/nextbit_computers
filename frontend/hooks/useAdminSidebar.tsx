@@ -1,25 +1,30 @@
-// hooks/useAdminSidebar.ts
 import { useState, useEffect } from "react";
 
 export function useAdminSidebar(initialState: boolean = true) {
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof localStorage === "undefined") return initialState;
+  // Always start with initialState (SSR-safe), hydrate from localStorage after mount
+  const [sidebarOpen, setSidebarOpen] = useState(initialState);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem("admin_sidebar_open");
-      return saved === null ? initialState : saved === "true";
+      if (saved !== null) {
+        setSidebarOpen(saved === "true");
+      }
     } catch {
-      return initialState;
+      // ignore
     }
-  });
+    setHydrated(true);
+  }, []);
 
-  // Persist sidebar state to localStorage
   useEffect(() => {
+    if (!hydrated) return;
     try {
       localStorage.setItem("admin_sidebar_open", String(sidebarOpen));
     } catch {
-      // Silently fail if localStorage not available
+      // ignore
     }
-  }, [sidebarOpen]);
+  }, [sidebarOpen, hydrated]);
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev);
   const closeSidebar = () => setSidebarOpen(false);

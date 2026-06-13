@@ -1,6 +1,5 @@
 // components/admin/AdminLayout.tsx 
 "use client";
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/auth/useAuth";
 import { AdminSidebar } from "./AdminSidebar";
@@ -15,8 +14,10 @@ export default function AdminLayout({ children, activeTab = "dashboard" }: Admin
   const { logout, user } = useAuth();
   const { sidebarOpen, toggleSidebar } = useAdminSidebar(true);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // Load settings
+  useEffect(() => { setMounted(true); }, []);
+
   const { data: settings } = usePublicSettings(["appearance", "general"]);
   
   const storeName = settings?.general?.storeName ||
@@ -26,7 +27,6 @@ export default function AdminLayout({ children, activeTab = "dashboard" }: Admin
   const logoUrl = settings?.appearance?.logoUrl ||
     (typeof localStorage !== "undefined" ? localStorage.getItem("store_logo_cache") : null);
 
-  // Persist logo/name to localStorage for instant subsequent loads
   useEffect(() => {
     if (settings?.general?.storeName)
       localStorage.setItem("store_name_cache", settings.general.storeName);
@@ -35,12 +35,10 @@ export default function AdminLayout({ children, activeTab = "dashboard" }: Admin
   }, [settings]);
 
   const { unreadCount } = useNotifications();
-
   const handleLogout = () => logout();
   const handleProfileClick = () => setProfileModalOpen(true);
-  const handleProfileUpdate = () => {
-    // Optional: refetch user data or update local state
-  };
+  const handleProfileUpdate = () => {};
+
   return (
     <div className="flex h-screen overflow-hidden">
       <AdminSidebar
@@ -51,8 +49,8 @@ export default function AdminLayout({ children, activeTab = "dashboard" }: Admin
         activeTab={activeTab}
         onProfileClick={handleProfileClick}
         onLogout={handleLogout}
+        disableTransition={!mounted}
       />
-
       <main className="flex-1 flex flex-col overflow-hidden">
         <AdminHeader
           activeTab={activeTab}
@@ -60,10 +58,8 @@ export default function AdminLayout({ children, activeTab = "dashboard" }: Admin
           toggleSidebar={toggleSidebar}
           unreadCount={unreadCount}
         />
-        
         <div className="flex-1 overflow-y-auto p-6">{children}</div>
       </main>
-
       <ProfileModal
         isOpen={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}

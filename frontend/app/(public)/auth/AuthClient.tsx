@@ -59,7 +59,7 @@ export default function AuthClient() {
   }, [mode]);
 
   // Form state
-  const { form, showPassword, updateField, updatePhone, setShowPassword, validateRegistration, getFullName } = 
+  const { form, showPassword, fieldErrors, updateField, updatePhone, setShowPassword, setFieldError, validateRegistration, getFullName } = 
     useAuthForm(prefillEmail);
 
   // Actions
@@ -75,6 +75,27 @@ export default function AuthClient() {
     onVerificationNeeded: (data: VerificationDataType) => setVerificationData(data),
     onResetNeeded: (data: ResetDataType) => setResetData(data),
   });
+
+  // If token present in URL (from email link), attempt automatic verification
+  useEffect(() => {
+    const tokenParam = searchParams.get("verify") || searchParams.get("token");
+    if (!tokenParam) return;
+
+    (async () => {
+      try {
+        const res = await verifyEmail.mutate({ token: tokenParam }) as any;
+        toast.success(res?.message || "Email verified successfully");
+        if (res?.email) {
+          updateField('email', res.email);
+        }
+        setAuthMode('login');
+        // Clean URL by navigating to /auth without query params
+        try { router.replace('/auth'); } catch (e) { /* ignore */ }
+      } catch (err: any) {
+        toast.error(err?.message || "Email verification failed");
+      }
+    })();
+  }, [searchParams, verifyEmail, updateField, router]);
 
   // OAuth error handling
   useEffect(() => {
@@ -96,9 +117,10 @@ export default function AuthClient() {
 
     if (authMode === 'login') {
       const result = await handleLogin(form.email, form.password);
-      setLoginError(result.error || null);
+      // If account needs verification, surface a field-level error and show resend option
       if (result.needsVerification && result.email) {
         setUnverifiedEmail(result.email);
+        setLoginError('Account must be verified to Sign in.');
         return;
       }
       if (result.success) {
@@ -116,18 +138,28 @@ export default function AuthClient() {
       }
 
       const result = await handleRegister({
-        name: getFullName,
+        first_name: form.firstName,
+        last_name: form.lastName,
+        surname: form.surname || undefined,
         email: form.email,
         password: form.password,
         phone: form.phone,
+        country_code: form.countryCode || '+254',
         claimOrderNumber,
       });
 
-      if (result.success && !result.needsVerification) {
-        router.push(redirectUrl);
+      if (result.fieldError) {
+        setFieldError(result.fieldError.field, result.fieldError.message);
+        return;
+      }
+
+      if (result.success) {
+        // Always show verification gate — never redirect straight to dashboard
+        setUnverifiedEmail(form.email);
+        return;
       }
     }
-  }, [authMode, form, handleLogin, handleRegister, handleForgotPassword, validateRegistration, getFullName, claimOrderNumber, redirectUrl, verificationData]);
+  }, [authMode, form, handleLogin, handleRegister, handleForgotPassword, validateRegistration, setFieldError, getFullName, claimOrderNumber, redirectUrl, verificationData]);
 
   const toggleAuthMode = useCallback(() => {
     setAuthMode(prev => prev === 'login' ? 'register' : 'login');
@@ -192,6 +224,8 @@ export default function AuthClient() {
                 onForgotPassword={() => setAuthMode('forgot-password')}
                 onSubmit={handleSubmit}
                 errorMessage={loginError}
+                needsVerification={Boolean(unverifiedEmail)}
+                onResendVerification={handleResendVerification}
               />
             ),
           };
@@ -204,6 +238,7 @@ export default function AuthClient() {
                 formData={form}
                 showPassword={showPassword}
                 isLoading={isPending}
+                fieldErrors={fieldErrors}
                 onFieldChange={updateField}
                 onPhoneChange={updatePhone}
                 onTogglePassword={() => setShowPassword(prev => !prev)}
@@ -242,15 +277,20 @@ export default function AuthClient() {
 
         {config.form}
 
-        {unverifiedEmail && authMode === 'login' && (
-          <div className="mt-4 p-4 bg-muted/50 rounded-lg text-center">
-            <p className="text-sm mb-2">Didn't receive the verification email?</p>
+        {unverifiedEmail && (
+          <div className="mt-4 p-4 bg-muted/50 rounded-lg text-center space-y-2">
+            <p className="text-sm font-medium">
+              {authMode === 'register'
+                ? '📧 Check your inbox to verify your email before signing in.'
+                : 'Your email is not verified yet.'}
+            </p>
+            <p className="text-xs text-muted-foreground">{unverifiedEmail}</p>
             <button
               onClick={handleResendVerification}
               disabled={resendVerification.isPending}
               className="text-sm text-[var(--brand)] hover:underline"
             >
-              Resend Verification Code
+              Resend verification email
             </button>
           </div>
         )}

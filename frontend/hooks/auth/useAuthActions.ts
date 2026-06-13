@@ -56,24 +56,42 @@ export function useAuthActions({ onVerificationNeeded, onResetNeeded }: AuthActi
     }
   }, [login, refetchUser]);
 
-  const handleRegister = useCallback(async (data: any): Promise<{ success: boolean; needsVerification?: boolean; verificationData?: VerificationData; data?: AuthResponse }> => {
+  const handleRegister = useCallback(async (data: any): Promise<{ success: boolean; needsVerification?: boolean; verificationData?: VerificationData; data?: AuthResponse; error?: string; fieldError?: { field: string; message: string } }> => {
     try {
-      const result = await register.mutate(data) as AuthResponse;
-      toast.success("Account created successfully.");
-      if (result.token && result.email) {
-        const verificationData = { token: result.token, email: result.email };
-        onVerificationNeeded(verificationData);
-        return { success: true, needsVerification: true, verificationData, data: result };
+      const result = await register.mutate(data) as any;
+      // Backend now returns {needs_verification: true, email, token}
+      if (result.needs_verification) {
+        toast.success("Account created! Please check your email to verify.");
+        if (result.token && result.email) {
+          const verificationData = { token: result.token, email: result.email };
+          onVerificationNeeded(verificationData);
+        }
+        return { success: true, needsVerification: true, data: result };
       }
-
+      // Fallback: if token somehow returned, log in normally
       window.dispatchEvent(new Event("userAuthChanged"));
       await refetchUser();
       return { success: true, needsVerification: false, data: result };
     } catch (err: any) {
-      toast.error(err.message || "Registration failed");
-      return { success: false };
+      const errorMessage = err.message || "Registration failed";
+      
+      // Check if this is an email already exists error
+      if (errorMessage.toLowerCase().includes("email already exists") || 
+          errorMessage.toLowerCase().includes("already exists in nextbit") ||
+          errorMessage.toLowerCase().includes("registration already in progress")) {
+        return { 
+          success: false, 
+          fieldError: { 
+            field: 'email', 
+            message: 'This email already exists in Nextbit Ecosystem.' 
+          } 
+        };
+      }
+      
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     }
-  }, [register, onVerificationNeeded, refetchUser]);
+  }, [register, refetchUser, onVerificationNeeded]);
 
   const handleForgotPassword = useCallback(async (email: string): Promise<{ success: boolean }> => {
     try {

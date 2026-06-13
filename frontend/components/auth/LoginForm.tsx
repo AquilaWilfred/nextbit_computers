@@ -18,6 +18,8 @@ interface LoginFormProps {
   onForgotPassword: () => void;
   onSubmit: (e: React.FormEvent) => void;
   errorMessage?: string;
+  needsVerification?: boolean;
+  onResendVerification?: () => void;
 }
 
 export const LoginForm: FC<LoginFormProps> = ({
@@ -33,6 +35,7 @@ export const LoginForm: FC<LoginFormProps> = ({
   onForgotPassword,
   onSubmit,
   errorMessage
+  , needsVerification = false, onResendVerification
 }) => {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -99,10 +102,19 @@ export const LoginForm: FC<LoginFormProps> = ({
       {errorMessage && (
         <div
           key={errorMessage}
-          className="shake flex items-center gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md px-3 py-2"
+          className="shake flex flex-col gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md px-3 py-2"
         >
-          <Lock className="w-4 h-4 shrink-0" />
-          {errorMessage}
+          <div className="flex items-center gap-2">
+            <Lock className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          {needsVerification && onResendVerification && (
+            <div>
+              <button type="button" onClick={onResendVerification} className="text-red-600 underline font-medium">
+                Resend Verification link?
+              </button>
+            </div>
+          )}
         </div>
       )}
 
