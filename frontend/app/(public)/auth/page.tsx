@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     description: 'Access your NextBit Computer account.',
     type: 'website',
     // actual domain
-    url: 'https://nextbitcomputers.vercel.app/auth',
+    url: 'https://nextbit-computers.vercel.app/auth',
     siteName: 'NextBit Computers',
   },
   twitter: {
