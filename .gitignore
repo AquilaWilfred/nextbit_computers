@@ -47,3 +47,4 @@
 **/.vscode/
 backend/gateway/cookies.txt
 backend/gateway/cookies.txt
+.vercel

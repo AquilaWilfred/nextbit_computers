@@ -1,6 +1,6 @@
 # NextBit Engineering
 
-> A hybrid B2B2C trust infrastructure and retail marketplace operating system built for the East African laptop and PC market. NextBit combines hardware verification, distributed escrow payments, a WebSocket-backed technician marketplace, and AI-powered semantic assistance into a single unified platform.
+> A hybrid B2B2C trust infrastructure and retail marketplace operating system built for Kenyan laptop and PC market. NextBit combines hardware verification, distributed escrow payments, technician marketplace, and AI-powered semantic assistance into a single unified platform.
 
 **Production Deployment:** [https://nextbit-computers.vercel.app](https://nextbit-computers.vercel.app)  
 **Source Code Repository:** [https://github.com/AquilaWilfred/nextbit_computers](https://github.com/AquilaWilfred/nextbit_computers)
