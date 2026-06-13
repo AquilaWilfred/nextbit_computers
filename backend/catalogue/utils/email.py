@@ -48,7 +48,7 @@ def send_verification_email(to: str, name: str, token: str) -> bool:
     # Generate a 6-digit code from token for manual entry
     code = ''.join([str(ord(c) % 10) for c in token[:6]]).ljust(6, '0')[:6]
     
-    verify_url = f"{settings.frontend_url}/auth?verify={token}"
+    verify_url = f"{settings.frontend_url}/verify-email?token={token}"
     html = f"""
     <!DOCTYPE html>
     <html lang="en">

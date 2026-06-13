@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     redis_url: str
     gateway_url: str = "http://localhost:8080"
     internal_api_key: str = "nextbit_internal_secret_2026"
-    frontend_url: str = "https://nextbitcomputer.vercel.app"
+    frontend_url: str = "https://nextbitcomputers.vercel.app"
 
     # SMTP
     smtp_host: str = "smtp.gmail.com"

@@ -21,13 +21,23 @@ function VerifyEmailContent() {
     proxyClient.post('/api/auth/verify-email', { token })
       .then(() => {
         setStatus('success');
-        setMessage('Your email has been verified successfully.');
+        setMessage('Your email has been verified successfully. Redirecting to your account...');
       })
       .catch((err: any) => {
         setStatus('error');
         setMessage(err?.message || 'This link is invalid or has expired.');
       });
   }, [token]);
+
+  useEffect(() => {
+    if (status !== 'success') return;
+
+    const timer = setTimeout(() => {
+      router.push('/dashboard');
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [status, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">

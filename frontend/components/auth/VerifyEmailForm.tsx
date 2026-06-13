@@ -12,6 +12,7 @@ interface VerifyEmailFormProps {
   verificationData: VerificationData;
   verifyEmail: any;
   resendVerification: any;
+  onVerified: () => void;
   onBackToLogin: () => void;
 }
 
@@ -19,6 +20,7 @@ export function VerifyEmailForm({
   verificationData,
   verifyEmail,
   resendVerification,
+  onVerified,
   onBackToLogin,
 }: VerifyEmailFormProps) {
   const [otpCode, setOtpCode] = useState("");
@@ -30,9 +32,15 @@ export function VerifyEmailForm({
     return () => clearTimeout(t);
   }, [resendTimer]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    verifyEmail.mutate({ token: verificationData.token, code: otpCode });
+    try {
+      await verifyEmail.mutateAsync({ token: verificationData.token, code: otpCode });
+      onVerified();
+      toast.success("Email verified successfully. You can now sign in.");
+    } catch (error: any) {
+      toast.error(error?.message || "Verification failed. Please try again.");
+    }
   };
 
   const handleResend = () => {

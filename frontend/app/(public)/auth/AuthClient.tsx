@@ -88,6 +88,8 @@ export default function AuthClient() {
         if (res?.email) {
           updateField('email', res.email);
         }
+        setUnverifiedEmail(null);
+        setVerificationData(null);
         setAuthMode('login');
         // Clean URL by navigating to /auth without query params
         try { router.replace('/auth'); } catch (e) { /* ignore */ }
@@ -199,6 +201,7 @@ export default function AuthClient() {
           verificationData={verificationData}
           verifyEmail={verifyEmail}
           resendVerification={resendVerification}
+          onVerified={() => { setVerificationData(null); setUnverifiedEmail(null); setAuthMode('login'); }}
           onBackToLogin={() => { setVerificationData(null); setAuthMode('login'); }}
         />
       );
