@@ -5,11 +5,24 @@ use axum::extract::State;
 use std::sync::Arc;
 use sqlx::Row;
 
+/// List all scans for a device identified by its device_id string.
+#[utoipa::path(
+    get,
+    path = "/api/devices/{device_id}/scans",
+    params(
+        ("device_id" = String, Path, description = "Device identifier string")
+    ),
+    responses(
+        (status = 200, description = "List of scans for the device", body = Vec<Scan>),
+        (status = 404, description = "Device not found"),
+        (status = 500, description = "Internal server error"),
+    ),
+    tag = "Devices"
+)]
 pub async fn get_device_scans(
     State(state): State<Arc<AppState>>,
     Path(device_id): Path<String>,
 ) -> Result<Json<Vec<Scan>>, axum::http::StatusCode> {
-    // First get device id
     let device_row = sqlx::query("SELECT id FROM devices WHERE device_id = $1")
         .bind(device_id)
         .fetch_optional(&state.pg)
@@ -34,6 +47,21 @@ pub async fn get_device_scans(
     Ok(Json(scans))
 }
 
+/// Get a single scan by device_id and scan_id.
+#[utoipa::path(
+    get,
+    path = "/api/devices/{device_id}/scans/{scan_id}",
+    params(
+        ("device_id" = String, Path, description = "Device identifier string"),
+        ("scan_id"   = String, Path, description = "Scan identifier string"),
+    ),
+    responses(
+        (status = 200, description = "Scan record", body = Scan),
+        (status = 404, description = "Scan or device not found"),
+        (status = 500, description = "Internal server error"),
+    ),
+    tag = "Devices"
+)]
 pub async fn get_scan(
     State(state): State<Arc<AppState>>,
     Path((device_id, scan_id)): Path<(String, String)>,

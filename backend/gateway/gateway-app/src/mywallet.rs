@@ -17,7 +17,6 @@ use crate::daraja::b2c::B2cResultBody;
 use crate::services::fee::compute_platform_fee_cents;
 
 // ── Card / Wallet Models ───────────────────────────────────────────────────────
-// These map to the existing nextbit_cards table — no migration needed.
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct WalletCard {
@@ -34,7 +33,7 @@ pub struct WalletCardResponse {
     pub id:            Uuid,
     pub card_number:   String,
     pub card_holder:   String,
-    pub balance_kes:   String,   // "1500.00" — never float
+    pub balance_kes:   String,
     pub is_active:     bool,
 }
 
@@ -54,8 +53,8 @@ impl From<WalletCard> for WalletCardResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct LoadWalletRequest {
-    pub phone:      String,   // buyer's Mpesa phone
-    pub amount_kes: u64,      // how much to load
+    pub phone:      String,
+    pub amount_kes: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -67,8 +66,25 @@ pub struct LoadWalletInitiated {
 
 #[derive(Debug, Deserialize)]
 pub struct WithdrawRequest {
-    pub phone:      String,   // seller's Mpesa phone to withdraw to
+    pub phone:      String,
     pub amount_kes: u64,
+}
+
+// ── Transaction response (replaces models::wallet::WalletTxResponse) ──────────
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct WalletTx {
+    pub id:             Uuid,
+    pub card_id:        Uuid,
+    pub user_id:        Uuid,
+    pub tx_type:        String,
+    pub status:         String,
+    pub amount_cents:   i64,
+    pub fee_cents:      i64,
+    pub net_cents:      i64,
+    pub balance_before: i64,
+    pub balance_after:  i64,
+    pub description:    Option<String>,
 }
 
 // ── Get or Create Card ─────────────────────────────────────────────────────────
@@ -78,7 +94,6 @@ pub async fn get_or_create_card(
     user_id:     Uuid,
     holder_name: &str,
 ) -> Result<WalletCard, DarajaError> {
-    // Try get first
     let existing = sqlx::query_as::<_, WalletCard>(
         r#"SELECT id, user_id, card_number, card_holder, balance_cents, is_active
            FROM nextbit_cards WHERE user_id = $1"#,
@@ -91,7 +106,6 @@ pub async fn get_or_create_card(
         return Ok(card);
     }
 
-    // Generate card number: NB + 14 random digits
     let card_number = format!("NB{:014}", rand_card_suffix());
 
     let card = sqlx::query_as::<_, WalletCard>(
@@ -104,8 +118,8 @@ pub async fn get_or_create_card(
     .bind(user_id)
     .bind(&card_number)
     .bind(holder_name)
-    .bind(12i16)    // December
-    .bind(2029i16)  // 3-year validity
+    .bind(12i16)
+    .bind(2029i16)
     .fetch_one(pool)
     .await?;
 
@@ -118,12 +132,10 @@ fn rand_card_suffix() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .subsec_nanos();
-    // Simple — for prod use a CSPRNG
     (nanos as u64) % 100_000_000_000_000
 }
 
 // ── Load Wallet via STK Push ───────────────────────────────────────────────────
-// User wants to top up their NextBit wallet with M-Pesa.
 
 pub async fn initiate_wallet_load(
     pool:    &PgPool,
@@ -145,20 +157,12 @@ pub async fn initiate_wallet_load(
     })?;
 
     let normalized = normalise_phone(phone)?;
-
-    // Reference: "load-{card_id}" — used to match STK callback
-    let reference = format!("load-{}", card.id);
+    let reference  = format!("load-{}", card.id);
 
     let stk = daraja
-        .stk_push(
-            &normalized,
-            amount,
-            &reference,
-            "NextBit Wallet Top-Up",
-        )
+        .stk_push(&normalized, amount, &reference, "NextBit Wallet Top-Up")
         .await?;
 
-    // Record a pending wallet transaction
     sqlx::query(
         r#"
         INSERT INTO wallet_transactions
@@ -184,24 +188,18 @@ pub async fn initiate_wallet_load(
 }
 
 // ── On Wallet Load STK Callback ────────────────────────────────────────────────
-// Daraja calls back after buyer pays.
-// account_reference from the callback is "load-{card_id}".
 
 pub async fn on_wallet_load_stk_callback(
-    pool:           &PgPool,
-    checkout_id:    &str,
-    result_code:    i32,
-    amount_cents:   i64,
-    mpesa_receipt:  Option<&str>,
+    pool:          &PgPool,
+    checkout_id:   &str,
+    result_code:   i32,
+    amount_cents:  i64,
+    mpesa_receipt: Option<&str>,
 ) -> Result<(), DarajaError> {
     if result_code != 0 {
-        // Mark the pending transaction as failed
         sqlx::query(
-            r#"
-            UPDATE wallet_transactions
-            SET status = 'failed'
-            WHERE fw_tx_ref = $1 AND status = 'pending'
-            "#,
+            r#"UPDATE wallet_transactions SET status = 'failed'
+               WHERE fw_tx_ref = $1 AND status = 'pending'"#,
         )
         .bind(checkout_id)
         .execute(pool)
@@ -209,16 +207,22 @@ pub async fn on_wallet_load_stk_callback(
         return Ok(());
     }
 
-    // Fetch the pending transaction to get card_id and current balance
-    let row = sqlx::query!(
+    #[derive(sqlx::FromRow)]
+    struct PendingTx {
+        tx_id:         Uuid,
+        card_id:       Uuid,
+        balance_cents: i64,
+    }
+
+    let row = sqlx::query_as::<_, PendingTx>(
         r#"
         SELECT wt.id as tx_id, wt.card_id, nc.balance_cents
         FROM wallet_transactions wt
         JOIN nextbit_cards nc ON nc.id = wt.card_id
         WHERE wt.fw_tx_ref = $1 AND wt.status = 'pending'
         "#,
-        checkout_id
     )
+    .bind(checkout_id)
     .fetch_optional(pool)
     .await?;
 
@@ -228,21 +232,13 @@ pub async fn on_wallet_load_stk_callback(
     };
 
     let new_balance = row.balance_cents + amount_cents;
+    let mut db_tx   = pool.begin().await?;
 
-    // Atomic: update card balance + complete wallet tx
-    let mut db_tx = pool.begin().await?;
-
-    sqlx::query(
-        r#"
-        UPDATE nextbit_cards
-        SET balance_cents = $1
-        WHERE id = $2
-        "#,
-    )
-    .bind(new_balance)
-    .bind(row.card_id)
-    .execute(&mut *db_tx)
-    .await?;
+    sqlx::query(r#"UPDATE nextbit_cards SET balance_cents = $1 WHERE id = $2"#)
+        .bind(new_balance)
+        .bind(row.card_id)
+        .execute(&mut *db_tx)
+        .await?;
 
     sqlx::query(
         r#"
@@ -264,19 +260,17 @@ pub async fn on_wallet_load_stk_callback(
     .await?;
 
     db_tx.commit().await?;
-
     Ok(())
 }
 
 // ── Withdraw from Wallet via B2C ───────────────────────────────────────────────
-// Seller wants to move wallet balance to their Mpesa.
 
 pub async fn initiate_wallet_withdrawal(
-    pool:      &PgPool,
-    daraja:    &DarajaClient,
-    user_id:   Uuid,
-    phone:     &str,
-    amount:    u64,
+    pool:    &PgPool,
+    daraja:  &DarajaClient,
+    user_id: Uuid,
+    phone:   &str,
+    amount:  u64,
 ) -> Result<String, DarajaError> {
     let card = sqlx::query_as::<_, WalletCard>(
         r#"SELECT id, user_id, card_number, card_holder, balance_cents, is_active
@@ -290,51 +284,41 @@ pub async fn initiate_wallet_withdrawal(
         other => DarajaError::Database(other),
     })?;
 
-    let amount_cents = (amount * 100) as i64;
-    let fee_cents = compute_platform_fee_cents(amount_cents);
-    let net_cents = amount_cents - fee_cents;
-    let net_kes = (net_cents / 100) as u64;
+    let amount_cents  = (amount * 100) as i64;
+    let fee_cents     = compute_platform_fee_cents(amount_cents);
+    let net_cents     = amount_cents - fee_cents;
+    let net_kes       = (net_cents / 100) as u64;
 
     if card.balance_cents < amount_cents {
         return Err(DarajaError::InsufficientBalance {
             available: card.balance_cents,
-            required: amount_cents,
+            required:  amount_cents,
         });
     }
 
-    let normalized = normalise_phone(phone)?;
+    let normalized    = normalise_phone(phone)?;
     let originator_id = format!("withdraw-{}", card.id);
 
     let b2c_ack = daraja
-        .b2c_payment(
-            &originator_id,
-            &normalized,
-            net_kes,
-            "BusinessPayment",
-            "NextBit wallet withdrawal",
-        )
+        .b2c_payment(&originator_id, &normalized, net_kes, "BusinessPayment", "NextBit wallet withdrawal")
         .await?;
 
-    // Deduct balance immediately (holds it); reverse on B2C failure
     let new_balance = card.balance_cents - amount_cents;
+    let mut db_tx   = pool.begin().await?;
 
-    let mut db_tx = pool.begin().await?;
-
-    sqlx::query(
-        r#"UPDATE nextbit_cards SET balance_cents = $1 WHERE id = $2"#,
-    )
-    .bind(new_balance)
-    .bind(card.id)
-    .execute(&mut *db_tx)
-    .await?;
+    sqlx::query(r#"UPDATE nextbit_cards SET balance_cents = $1 WHERE id = $2"#)
+        .bind(new_balance)
+        .bind(card.id)
+        .execute(&mut *db_tx)
+        .await?;
 
     sqlx::query(
         r#"
         INSERT INTO wallet_transactions
             (card_id, user_id, tx_type, status, amount_cents, fee_cents, net_cents,
              balance_before, balance_after, fw_tx_ref, description)
-        VALUES ($1, $2, 'withdrawal', 'pending', $3, $4, $5,
-                $6, $7, $8, 'M-Pesa withdrawal via B2C')
+        VALUES ($1, $2, 'withdrawal', 'pending', $3, $4, $5, $6, $7, $8,
+                'M-Pesa withdrawal via B2C')
         "#,
     )
     .bind(card.id)
@@ -349,7 +333,6 @@ pub async fn initiate_wallet_withdrawal(
     .await?;
 
     db_tx.commit().await?;
-
     Ok(b2c_ack.conversation_id)
 }
 
@@ -363,8 +346,7 @@ pub async fn on_withdrawal_result(
         sqlx::query(
             r#"
             UPDATE wallet_transactions
-            SET status       = 'completed',
-                fw_charge_id = $1
+            SET status = 'completed', fw_charge_id = $1
             WHERE fw_tx_ref = $2 AND status = 'pending'
             "#,
         )
@@ -373,7 +355,6 @@ pub async fn on_withdrawal_result(
         .execute(pool)
         .await?;
     } else {
-        // Reverse the balance deduction
         sqlx::query(
             r#"
             UPDATE nextbit_cards nc
@@ -389,11 +370,8 @@ pub async fn on_withdrawal_result(
         .await?;
 
         sqlx::query(
-            r#"
-            UPDATE wallet_transactions
-            SET status = 'reversed'
-            WHERE fw_tx_ref = $1 AND status = 'pending'
-            "#,
+            r#"UPDATE wallet_transactions SET status = 'reversed'
+               WHERE fw_tx_ref = $1 AND status = 'pending'"#,
         )
         .bind(&result.conversation_id)
         .execute(pool)
@@ -405,7 +383,6 @@ pub async fn on_withdrawal_result(
             "Withdrawal B2C failed — balance reversed"
         );
     }
-
     Ok(())
 }
 
@@ -428,4 +405,151 @@ pub async fn get_wallet_balance(
     })?;
 
     Ok(card.into())
+}
+
+// ── Pay Order from Wallet ──────────────────────────────────────────────────────
+// Buyer pays for an escrow order directly from wallet balance.
+// Always internal and fee-free — no M-Pesa or FW involved.
+
+pub async fn pay_order_from_wallet(
+    pool:         &PgPool,
+    buyer_id:     Uuid,
+    escrow_id:    Uuid,
+    amount_cents: i64,
+) -> Result<WalletTx, DarajaError> {
+    let card = sqlx::query_as::<_, WalletCard>(
+        r#"SELECT id, user_id, card_number, card_holder, balance_cents, is_active
+           FROM nextbit_cards WHERE user_id = $1"#,
+    )
+    .bind(buyer_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::RowNotFound => DarajaError::NotFound(buyer_id),
+        other => DarajaError::Database(other),
+    })?;
+
+    if !card.is_active {
+        return Err(DarajaError::InvalidState("Wallet card is inactive".into()));
+    }
+    if card.balance_cents < amount_cents {
+        return Err(DarajaError::InsufficientBalance {
+            available: card.balance_cents,
+            required:  amount_cents,
+        });
+    }
+
+    let tx = sqlx::query_as::<_, WalletTx>(
+        r#"
+        WITH updated_card AS (
+            UPDATE nextbit_cards
+            SET balance_cents = balance_cents - $1
+            WHERE user_id = $2
+              AND is_active = TRUE
+              AND balance_cents >= $1
+            RETURNING id,
+                      balance_cents + $1 AS balance_before,
+                      balance_cents      AS balance_after
+        )
+        INSERT INTO wallet_transactions
+            (card_id, user_id, tx_type, status,
+             amount_cents, fee_cents, net_cents,
+             balance_before, balance_after,
+             escrow_id, description)
+        SELECT
+            uc.id, $2, 'order_payment', 'completed',
+            $1, 0, $1,
+            uc.balance_before, uc.balance_after,
+            $3, 'Order payment from NextBit wallet'
+        FROM updated_card uc
+        RETURNING id, card_id, user_id, tx_type, status,
+                  amount_cents, fee_cents, net_cents,
+                  balance_before, balance_after, description
+        "#,
+    )
+    .bind(amount_cents)
+    .bind(buyer_id)
+    .bind(escrow_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(tx)
+}
+
+// ── Credit Seller Payout ───────────────────────────────────────────────────────
+// Called after escrow is released — credits net amount to seller's wallet.
+
+pub async fn credit_seller_payout(
+    pool:               &PgPool,
+    seller_id:          Uuid,
+    escrow_id:          Uuid,
+    gross_cents:        i64,
+    platform_fee_cents: i64,
+) -> Result<WalletTx, DarajaError> {
+    let net       = gross_cents - platform_fee_cents;
+
+    let tx = sqlx::query_as::<_, WalletTx>(
+        r#"
+        WITH updated_card AS (
+            UPDATE nextbit_cards
+            SET balance_cents = balance_cents + $1
+            WHERE user_id = $2 AND is_active = TRUE
+            RETURNING id,
+                      balance_cents - $1 AS balance_before,
+                      balance_cents      AS balance_after
+        )
+        INSERT INTO wallet_transactions
+            (card_id, user_id, tx_type, status,
+             amount_cents, fee_cents, net_cents,
+             balance_before, balance_after,
+             escrow_id, description)
+        SELECT
+            uc.id, $2, 'seller_payout', 'completed',
+            $3, $4, $1,
+            uc.balance_before, uc.balance_after,
+            $5, 'Seller payout from escrow'
+        FROM updated_card uc
+        RETURNING id, card_id, user_id, tx_type, status,
+                  amount_cents, fee_cents, net_cents,
+                  balance_before, balance_after, description
+        "#,
+    )
+    .bind(net)
+    .bind(seller_id)
+    .bind(gross_cents)
+    .bind(platform_fee_cents)
+    .bind(escrow_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(tx)
+}
+
+// ── Get Transaction History ────────────────────────────────────────────────────
+// Paginated list of wallet transactions for a user.
+
+pub async fn get_transactions(
+    pool:    &PgPool,
+    user_id: Uuid,
+    limit:   i64,
+    offset:  i64,
+) -> Result<Vec<WalletTx>, DarajaError> {
+    let txs = sqlx::query_as::<_, WalletTx>(
+        r#"
+        SELECT id, card_id, user_id, tx_type, status,
+               amount_cents, fee_cents, net_cents,
+               balance_before, balance_after, description
+        FROM wallet_transactions
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+        "#,
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(txs)
 }

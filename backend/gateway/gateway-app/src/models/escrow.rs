@@ -5,7 +5,8 @@ use uuid::Uuid;
 
 // ── State Machine ──────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+/// Current state of an escrow transaction.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type, utoipa::ToSchema)]
 #[sqlx(type_name = "escrow_state", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum EscrowState {
@@ -13,7 +14,8 @@ pub enum EscrowState {
     PaymentPending,
     FundsHeldInEscrow,
     DisputeRaised,
-    Waiting,               // admin assigned, not yet ruled
+    /// Admin assigned, not yet ruled
+    Waiting,
     DeliveryConfirmed,
     ReleasedToSeller,
     Refunded,
@@ -23,15 +25,15 @@ pub enum EscrowState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EscrowAction {
-    InitiatePayment,       // buyer goes to checkout
-    PaymentConfirmed,      // flutterwave webhook: charge.completed + successful
-    PaymentFailed,         // flutterwave webhook: charge.completed + failed
-    RaiseDispute,          // buyer opens dispute
-    ConfirmDelivery,       // buyer confirms they received item
-    AdminPending,          // admin assigned to dispute (DisputeRaised -> Waiting)
-    AdminRuleForBuyer,     // admin rules: refund buyer
-    AdminRuleForSeller,    // admin rules: release to seller
-    ReleaseFunds,          // auto-release timer fires OR manual release after seller ruling
+    InitiatePayment,
+    PaymentConfirmed,
+    PaymentFailed,
+    RaiseDispute,
+    ConfirmDelivery,
+    AdminPending,
+    AdminRuleForBuyer,
+    AdminRuleForSeller,
+    ReleaseFunds,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -56,37 +58,36 @@ pub enum EscrowError {
 }
 
 // ── DB Row ─────────────────────────────────────────────────────────────────────
+// Raw database row — not exposed directly in API responses, no ToSchema needed.
 
 #[derive(Debug, Clone, FromRow)]
 pub struct EscrowTransaction {
-    pub id:               Uuid,
-    pub order_id:         Uuid,
-    pub buyer_id:         Uuid,
-    pub seller_id:        Uuid,
-    pub amount:           sqlx::types::BigDecimal,
-    pub currency:         String,
-    pub state:            EscrowState,
+    pub id:                Uuid,
+    pub order_id:          Uuid,
+    pub buyer_id:          Uuid,
+    pub seller_id:         Uuid,
+    pub amount:            sqlx::types::BigDecimal,
+    pub currency:          String,
+    pub state:             EscrowState,
 
-    // flutterwave refs
-    pub fw_tx_ref:        Option<String>,
-    pub fw_transfer_id:   Option<String>,
-    pub fw_charge_id:     Option<String>,
+    pub fw_tx_ref:         Option<String>,
+    pub fw_transfer_id:    Option<String>,
+    pub fw_charge_id:      Option<String>,
 
-    // dispute
-    pub dispute_reason:   Option<String>,
-    pub dispute_raised_at:Option<DateTime<Utc>>,
-    pub admin_id:         Option<Uuid>,
-    pub admin_ruling:     Option<String>,
-    pub admin_ruled_at:   Option<DateTime<Utc>>,
+    pub dispute_reason:    Option<String>,
+    pub dispute_raised_at: Option<DateTime<Utc>>,
+    pub admin_id:          Option<Uuid>,
+    pub admin_ruling:      Option<String>,
+    pub admin_ruled_at:    Option<DateTime<Utc>>,
 
-    // auto-release
-    pub auto_release_at:  Option<DateTime<Utc>>,
+    pub auto_release_at:   Option<DateTime<Utc>>,
 
-    pub created_at:       DateTime<Utc>,
-    pub updated_at:       DateTime<Utc>,
+    pub created_at:        DateTime<Utc>,
+    pub updated_at:        DateTime<Utc>,
 }
 
 // ── Audit Log Row ──────────────────────────────────────────────────────────────
+// Internal only — not exposed in API responses, no ToSchema needed.
 
 #[derive(Debug, Clone, FromRow)]
 pub struct EscrowAuditLog {
@@ -101,58 +102,90 @@ pub struct EscrowAuditLog {
 }
 
 // ── Request / Response DTOs ────────────────────────────────────────────────────
+// ⚠️  FLUTTERWAVE ENDPOINTS ARE DEPRECATED — being phased out in favour of Daraja.
+//     Kept for reference and gradual migration. Do not build new features on these.
+//     All handlers using these types are marked `deprecated = true` in Scalar.
 
-#[derive(Debug, Deserialize)]
-// #[serde(rename_all = "camelCase")]
+/// Create a new escrow transaction.
+///
+/// > ⚠️ **Deprecated — not currently active.**
+/// > Flutterwave integration is being phased out.
+/// > Use the **Daraja (M-Pesa)** escrow endpoints instead:
+/// > `POST /api/escrow/{escrow_id}/daraja/pay`
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateEscrowRequest {
+    /// UUID of the order this escrow covers.
     #[serde(alias = "order_id")]
     pub order_id:  Uuid,
+    /// UUID of the seller receiving funds on release.
     pub seller_id: Uuid,
+    /// Transaction amount in the specified currency.
     pub amount:    f64,
+    /// ISO 4217 currency code, defaults to `"KES"` if omitted.
     pub currency:  Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+/// Initiate a Flutterwave checkout for an escrow.
+///
+/// > ⚠️ **Deprecated — not currently active.**
+/// > Use `POST /api/escrow/{escrow_id}/daraja/pay` instead.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct InitiatePaymentRequest {
-    pub buyer_email: String,   // used to build Flutterwave customer object
-    pub buyer_name:  String,
-    pub redirect_url: String,  // where FW sends buyer after payment
+    /// Buyer's email address — used to build the Flutterwave customer object.
+    pub buyer_email:  String,
+    /// Buyer's display name shown on the Flutterwave checkout page.
+    pub buyer_name:   String,
+    /// URL Flutterwave redirects the buyer to after payment completes or fails.
+    pub redirect_url: String,
 }
 
-#[derive(Debug, Serialize)]
+/// Flutterwave checkout URL returned after payment initiation.
+///
+/// > ⚠️ **Deprecated — not currently active.**
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct InitiatePaymentResponse {
-    pub payment_url: String,   // redirect buyer here
-    pub fw_tx_ref:   String,   // save this — webhook uses it to find escrow
+    /// Redirect the buyer to this URL to complete payment.
+    pub payment_url: String,
+    /// Flutterwave transaction reference — stored and matched in the webhook.
+    pub fw_tx_ref:   String,
 }
 
-#[derive(Debug, Deserialize)]
+/// Raise a dispute on an escrow transaction.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RaiseDisputeRequest {
+    /// Description of the dispute reason.
     pub reason: String,
 }
 
-#[derive(Debug, Deserialize)]
+/// Admin ruling on a disputed escrow.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct AdminRulingRequest {
     pub ruling: AdminRuling,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+/// Who the admin rules in favour of.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AdminRuling {
+    /// Refund funds to the buyer.
     Buyer,
+    /// Release funds to the seller.
     Seller,
 }
 
-// ── API Response ───────────────────────────────────────────────────────────────
-// amount uses String to avoid f64 precision loss on financial values.
-
-#[derive(Debug, Serialize, Clone)]
+/// Escrow transaction summary returned in API responses.
+///
+/// `amount` is a string to avoid floating-point precision loss on financial values.
+#[derive(Debug, Serialize, Clone, utoipa::ToSchema)]
 pub struct EscrowResponse {
-    pub id:         Uuid,
-    pub order_id:   Uuid,
-    pub amount:     String,   // String, not f64 — avoids lossy float conversion
-    pub currency:   String,
-    pub state:      EscrowState,
-    pub fw_tx_ref:  Option<String>,
+    pub id:        Uuid,
+    pub order_id:  Uuid,
+    /// Amount as a decimal string, e.g. `"5000.00"`.
+    pub amount:    String,
+    pub currency:  String,
+    pub state:     EscrowState,
+    /// Flutterwave transaction reference, present after payment is initiated.
+    pub fw_tx_ref: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

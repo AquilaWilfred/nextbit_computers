@@ -8,7 +8,7 @@ fn jwt_secret() -> String {
 
 pub fn verify_jwt(token: &str) -> Result<String> {
     let secret = jwt_secret();
-    tracing::debug!("verify_jwt: secret='{}' token='{}'", secret, &token[..20]);
+    tracing::debug!("verify_jwt: secret='{}' token='{}'", secret, &token[..token.len().min(20)]);
     let result = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),

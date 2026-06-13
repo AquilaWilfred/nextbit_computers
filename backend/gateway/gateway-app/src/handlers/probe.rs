@@ -2,17 +2,95 @@ use axum::{extract::{Path, State}, http::StatusCode, Json};
 use chrono::Utc;
 use futures_util::TryStreamExt;
 use mongodb::bson::{doc, Document};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::{models::{HardwareReport, NetworkReport}, models::probe::{ProbeSubmit, ProbeResponse}, redis_helpers::with_redis, services::{device::upsert_device, scan::insert_scan, mongo_scan::insert_scan_mongo}, state::AppState};
+use crate::{
+    models::{HardwareReport, NetworkReport},
+    models::probe::{ProbeSubmit, ProbeResponse},
+    redis_helpers::with_redis,
+    services::{device::upsert_device, scan::insert_scan, mongo_scan::insert_scan_mongo},
+    state::AppState,
+};
 use tracing::{error, info};
+
+// ── Inline schemas ────────────────────────────────────────────────────────────
+
+/// Returned after a hardware report is successfully saved.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct HardwareReportSubmitted {
+    pub id:           Uuid,
+    pub device_id:    String,
+    pub submitted_at: String,
+}
+
+/// A single hardware report entry.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct HardwareReportEntry {
+    pub id:           Uuid,
+    pub device_id:    String,
+    pub submitted_at: String,
+    pub hardware:     Value,
+}
+
+/// List of hardware reports for a device.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct HardwareReportList {
+    pub device_id: String,
+    pub reports:   Vec<HardwareReportEntry>,
+}
+
+/// Returned after a network report is successfully saved.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct NetworkReportSubmitted {
+    pub id:          Uuid,
+    pub device_id:   String,
+    pub threat_hits: i64,
+    pub alert_queued: bool,
+}
+
+/// List of network/diagnostic reports for a device.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct NetworkReportList {
+    pub device_id: String,
+    pub reports:   Vec<Value>,
+}
+
+/// Generic probe error body.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct ProbeErrorResponse {
+    pub error: String,
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn db_error(db: &str, msg: String) -> (StatusCode, Json<Value>) {
     error!("{} error: {}", db, msg);
     (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("{} error: {}", db, msg) })))
 }
 
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
+/// Submit a hardware snapshot from a probe agent.
+///
+/// Persists the hardware payload to both Postgres (`probe_reports`) and
+/// MongoDB (`hardware_snapshots`). Called by the probe agent on each scan cycle.
+#[utoipa::path(
+    post,
+    path = "/api/probe/hardware",
+    tag = "Probe",
+    request_body(
+        content = HardwareReport,
+        description = "Hardware snapshot from the probe agent",
+        content_type = "application/json"
+    ),
+    responses(
+        (status = 201, description = "Hardware report saved",  body = HardwareReportSubmitted),
+        (status = 500, description = "Database error",         body = ProbeErrorResponse),
+    ),
+    security(("bearerAuth" = []))
+)]
 pub async fn submit_hardware(
     State(state): State<Arc<AppState>>,
     Json(body): Json<HardwareReport>,
@@ -36,37 +114,75 @@ pub async fn submit_hardware(
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "device_id": body.device_id, "submitted_at": now.to_rfc3339() }))))
 }
 
+/// Register or update a device and submit a full probe scan.
+///
+/// Upserts the device record, saves the scan to Postgres and MongoDB.
+/// Called by the probe agent on startup and periodically during operation.
+#[utoipa::path(
+    post,
+    path = "/api/probe/submit",
+    tag = "Probe",
+    request_body(
+        content = ProbeSubmit,
+        description = "Full probe scan payload including device identity and scan data",
+        content_type = "application/json"
+    ),
+    responses(
+        (status = 200, description = "Probe scan accepted",  body = ProbeResponse),
+        (status = 500, description = "Database error",       body = ProbeErrorResponse),
+    )
+)]
 pub async fn submit_probe(
     State(state): State<Arc<AppState>>,
     Json(body): Json<ProbeSubmit>,
 ) -> Result<Json<ProbeResponse>, (StatusCode, Json<Value>)> {
     let shop_id = body.shop_id.unwrap_or_else(Uuid::new_v4);
 
-    let device_result: Result<(crate::models::probe::Device, bool), Box<dyn std::error::Error>> = upsert_device(&state.pg, &body, shop_id).await;
+    let device_result: Result<(crate::models::probe::Device, bool), Box<dyn std::error::Error>> =
+        upsert_device(&state.pg, &body, shop_id).await;
     let (device, is_new_device) = device_result
         .map_err(|e| db_error("postgres", e.to_string()))?;
 
     let scan_id = Uuid::new_v4().to_string();
-    let insert_scan_result: Result<_, Box<dyn std::error::Error>> = insert_scan(&state.pg, device.id, scan_id.clone(), serde_json::to_value(&body).map_err(|e: serde_json::Error| db_error("postgres", e.to_string()))?)
-        .await;
-    insert_scan_result
-        .map_err(|e| db_error("postgres", e.to_string()))?;
+    let insert_scan_result: Result<_, Box<dyn std::error::Error>> = insert_scan(
+        &state.pg,
+        device.id,
+        scan_id.clone(),
+        serde_json::to_value(&body).map_err(|e: serde_json::Error| db_error("postgres", e.to_string()))?,
+    ).await;
+    insert_scan_result.map_err(|e| db_error("postgres", e.to_string()))?;
 
     let collection = state.mongo.collection::<Document>("scans");
-    let mongo_body = serde_json::to_value(&body).map_err(|e: serde_json::Error| db_error("mongodb", e.to_string()))?;
+    let mongo_body = serde_json::to_value(&body)
+        .map_err(|e: serde_json::Error| db_error("mongodb", e.to_string()))?;
     if let Err(e) = insert_scan_mongo(&collection, &device.device_id, &scan_id, mongo_body).await {
         error!("MongoDB insert failed, continuing without Mongo persistence: {}", e);
     }
 
-    let response = ProbeResponse {
+    Ok(Json(ProbeResponse {
         device_id: device.device_id,
         scan_id,
         is_new_device,
-    };
-
-    Ok(Json(response))
+    }))
 }
 
+/// Get all hardware reports for a device.
+///
+/// Returns all Postgres `probe_reports` rows for the device ordered by
+/// submission time descending.
+#[utoipa::path(
+    get,
+    path = "/api/probe/hardware/{device_id}",
+    tag = "Probe",
+    params(
+        ("device_id" = String, Path, description = "Device ID to fetch hardware reports for")
+    ),
+    responses(
+        (status = 200, description = "Hardware report list", body = HardwareReportList),
+        (status = 500, description = "Database error",       body = ProbeErrorResponse),
+    ),
+    security(("bearerAuth" = []))
+)]
 pub async fn get_hardware_reports(
     State(state): State<Arc<AppState>>,
     Path(device_id): Path<String>,
@@ -84,6 +200,23 @@ pub async fn get_hardware_reports(
     Ok(Json(json!({ "device_id": device_id, "reports": reports })))
 }
 
+/// Get the latest hardware snapshot for a device from MongoDB.
+///
+/// Returns the most recent document from the `hardware_snapshots` collection.
+#[utoipa::path(
+    get,
+    path = "/api/probe/hardware/{device_id}/latest",
+    tag = "Probe",
+    params(
+        ("device_id" = String, Path, description = "Device ID to fetch the latest snapshot for")
+    ),
+    responses(
+        (status = 200, description = "Latest hardware snapshot"),
+        (status = 404, description = "No snapshot found",   body = ProbeErrorResponse),
+        (status = 500, description = "Database error",      body = ProbeErrorResponse),
+    ),
+    security(("bearerAuth" = []))
+)]
 pub async fn get_latest_hardware(
     State(state): State<Arc<AppState>>,
     Path(device_id): Path<String>,
@@ -93,13 +226,36 @@ pub async fn get_latest_hardware(
         .sort(doc! { "captured_at": -1 }).limit(1).await
         .map_err(|e| db_error("mongodb", e.to_string()))?;
 
-    if let Some(doc) = cursor.try_next().await.map_err(|e: mongodb::error::Error| db_error("mongodb", e.to_string()))? {
-        Ok(Json(json!(mongodb::bson::to_bson(&doc).map_err(|e| db_error("mongodb", e.to_string()))?)))
+    if let Some(doc) = cursor.try_next().await
+        .map_err(|e: mongodb::error::Error| db_error("mongodb", e.to_string()))?
+    {
+        Ok(Json(json!(mongodb::bson::to_bson(&doc)
+            .map_err(|e| db_error("mongodb", e.to_string()))?)))
     } else {
         Err((StatusCode::NOT_FOUND, Json(json!({ "error": "No snapshot found" }))))
     }
 }
 
+/// Submit a network diagnostic report from a probe agent.
+///
+/// Saves connection, flow, and threat data to Postgres (`network_summaries`)
+/// and MongoDB (`diagnostic_events`). If `threat_hit_count > 0`, an alert
+/// is queued in Redis under `alerts:{device_id}` with a 1-hour TTL.
+#[utoipa::path(
+    post,
+    path = "/api/probe/network",
+    tag = "Probe",
+    request_body(
+        content = NetworkReport,
+        description = "Network diagnostic snapshot from the probe agent",
+        content_type = "application/json"
+    ),
+    responses(
+        (status = 201, description = "Network report saved",  body = NetworkReportSubmitted),
+        (status = 500, description = "Database error",        body = ProbeErrorResponse),
+    ),
+    security(("bearerAuth" = []))
+)]
 pub async fn submit_network(
     State(state): State<Arc<AppState>>,
     Json(body): Json<NetworkReport>,
@@ -135,14 +291,34 @@ pub async fn submit_network(
         match with_redis(redis_client, move |conn| {
             redis::cmd("SETEX").arg(&key).arg(3600i64).arg(&alert_str).query::<()>(conn)
         }).await {
-            Ok(_) => { info!("Threat alert queued for device {}", body.device_id); true }
+            Ok(_)  => { info!("Threat alert queued for device {}", body.device_id); true }
             Err(e) => { error!("Redis error: {}", e); false }
         }
     } else { false };
 
-    Ok((StatusCode::CREATED, Json(json!({ "id": id, "device_id": body.device_id, "threat_hits": threat_count, "alert_queued": alert_queued }))))
+    Ok((StatusCode::CREATED, Json(json!({
+        "id": id, "device_id": body.device_id,
+        "threat_hits": threat_count, "alert_queued": alert_queued
+    }))))
 }
 
+/// Get all network diagnostic reports for a device from MongoDB.
+///
+/// Returns all documents from `diagnostic_events` ordered by capture time
+/// descending.
+#[utoipa::path(
+    get,
+    path = "/api/probe/network/{device_id}",
+    tag = "Probe",
+    params(
+        ("device_id" = String, Path, description = "Device ID to fetch network reports for")
+    ),
+    responses(
+        (status = 200, description = "Network report list", body = NetworkReportList),
+        (status = 500, description = "Database error",      body = ProbeErrorResponse),
+    ),
+    security(("bearerAuth" = []))
+)]
 pub async fn get_network_reports(
     State(state): State<Arc<AppState>>,
     Path(device_id): Path<String>,
@@ -153,8 +329,12 @@ pub async fn get_network_reports(
         .map_err(|e| db_error("mongodb", e.to_string()))?;
 
     let mut reports = Vec::new();
-    while let Some(doc) = cursor.try_next().await.map_err(|e: mongodb::error::Error| db_error("mongodb", e.to_string()))? {
-        reports.push(mongodb::bson::to_bson(&doc).map_err(|e| db_error("mongodb", e.to_string()))?);
+    while let Some(doc) = cursor.try_next().await
+        .map_err(|e: mongodb::error::Error| db_error("mongodb", e.to_string()))?
+    {
+        reports.push(mongodb::bson::to_bson(&doc)
+            .map_err(|e| db_error("mongodb", e.to_string()))?);
     }
+
     Ok(Json(json!({ "device_id": device_id, "reports": reports })))
 }

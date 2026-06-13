@@ -6,7 +6,7 @@ use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::models::{Claims};
+use crate::models::Claims;
 use crate::models::escrow::{
     AdminRulingRequest,
     CreateEscrowRequest,
@@ -31,9 +31,21 @@ async fn resolve_buyer(
 }
 
 // ── POST /api/escrow ───────────────────────────────────────────────────────────
-// Creates the escrow row in state=Created.
-// Does NOT contact Flutterwave yet — that happens in initiate-payment.
 
+/// Create a new escrow transaction (state = Created).
+/// Does NOT contact Flutterwave yet — call initiate-payment next.
+#[utoipa::path(
+    post,
+    path = "/api/escrow",
+    request_body = CreateEscrowRequest,
+    responses(
+        (status = 200, description = "Escrow created",        body = EscrowResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Escrow"
+)]
 pub async fn create_escrow(
     State(app):        State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
@@ -63,16 +75,33 @@ pub async fn create_escrow(
 }
 
 // ── POST /api/escrow/:id/initiate-payment ─────────────────────────────────────
-// Generates fw_tx_ref, saves it, calls Flutterwave, returns payment URL.
-// Buyer is redirected to this URL to complete payment.
 
+/// Generate a Flutterwave payment link for an existing escrow.
+/// Transitions state to PaymentPending and returns the redirect URL.
+#[utoipa::path(
+    post,
+    path = "/api/escrow/{id}/initiate-payment",
+    params(
+        ("id" = Uuid, Path, description = "Escrow transaction ID"),
+    ),
+    request_body = InitiatePaymentRequest,
+    responses(
+        (status = 200, description = "Payment link created",  body = InitiatePaymentResponse),
+        (status = 400, description = "Bad request / invalid state transition"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden — not your escrow"),
+        (status = 404, description = "Escrow not found"),
+        (status = 502, description = "Flutterwave error"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Escrow"
+)]
 pub async fn initiate_payment(
     State(app):        State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     Path(id):          Path<Uuid>,
     Json(body):        Json<InitiatePaymentRequest>,
 ) -> impl IntoResponse {
-    // Verify the escrow exists and belongs to this buyer
     let buyer_id = match resolve_buyer(&app.pg, &claims.sub).await {
         Ok(id) => id,
         Err((code, msg)) => return (code, msg).into_response(),
@@ -87,16 +116,12 @@ pub async fn initiate_payment(
         return (StatusCode::FORBIDDEN, "Not your escrow".to_string()).into_response();
     }
 
-    // Generate a unique tx_ref for Flutterwave
     let fw_tx_ref = format!("nextbit-escrow-{}-{}", id, Uuid::new_v4());
 
-    // Save fw_tx_ref to DB BEFORE calling Flutterwave
-    // (so the webhook can find it even if we crash after FW responds)
     if let Err(e) = escrow_svc::save_fw_tx_ref(&app.pg, id, &fw_tx_ref).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
     }
 
-    // Transition state to PaymentPending
     if let Err(e) = escrow_svc::apply_transition(
         &app.pg,
         id,
@@ -109,7 +134,6 @@ pub async fn initiate_payment(
         return (StatusCode::BAD_REQUEST, e.to_string()).into_response();
     }
 
-    // Build Flutterwave payment link request
     let amount: f64 = escrow.amount.to_string().parse().unwrap_or(0.0);
     let fw_request = fw_svc::PaymentLinkRequest {
         tx_ref:   fw_tx_ref.clone(),
@@ -138,6 +162,19 @@ pub async fn initiate_payment(
 
 // ── GET /api/escrow/:id ────────────────────────────────────────────────────────
 
+/// Retrieve an escrow transaction by ID.
+#[utoipa::path(
+    get,
+    path = "/api/escrow/{id}",
+    params(
+        ("id" = Uuid, Path, description = "Escrow transaction ID"),
+    ),
+    responses(
+        (status = 200, description = "Escrow found",   body = EscrowResponse),
+        (status = 404, description = "Escrow not found"),
+    ),
+    tag = "Escrow"
+)]
 pub async fn get_escrow(
     State(app): State<Arc<AppState>>,
     Path(id):   Path<Uuid>,
@@ -150,6 +187,23 @@ pub async fn get_escrow(
 
 // ── POST /api/escrow/:id/confirm-delivery ─────────────────────────────────────
 
+/// Buyer confirms delivery, releasing funds to the seller.
+#[utoipa::path(
+    post,
+    path = "/api/escrow/{id}/confirm-delivery",
+    params(
+        ("id" = Uuid, Path, description = "Escrow transaction ID"),
+    ),
+    responses(
+        (status = 200, description = "Delivery confirmed",    body = EscrowResponse),
+        (status = 400, description = "Bad request / invalid state transition"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden — not your escrow"),
+        (status = 404, description = "Escrow not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Escrow"
+)]
 pub async fn confirm_delivery(
     State(app):        State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
@@ -160,7 +214,6 @@ pub async fn confirm_delivery(
         Err((code, msg)) => return (code, msg).into_response(),
     };
 
-    // Verify escrow belongs to this buyer
     let escrow = match escrow_svc::get_escrow(&app.pg, id).await {
         Ok(e)  => e,
         Err(e) => return (StatusCode::NOT_FOUND, e.to_string()).into_response(),
@@ -186,6 +239,24 @@ pub async fn confirm_delivery(
 
 // ── POST /api/escrow/:id/dispute ───────────────────────────────────────────────
 
+/// Buyer raises a dispute, halting fund release pending admin review.
+#[utoipa::path(
+    post,
+    path = "/api/escrow/{id}/dispute",
+    params(
+        ("id" = Uuid, Path, description = "Escrow transaction ID"),
+    ),
+    request_body = RaiseDisputeRequest,
+    responses(
+        (status = 200, description = "Dispute raised",        body = EscrowResponse),
+        (status = 400, description = "Bad request / invalid state transition"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden — not your escrow"),
+        (status = 404, description = "Escrow not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Escrow"
+)]
 pub async fn raise_dispute(
     State(app):        State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
@@ -213,8 +284,24 @@ pub async fn raise_dispute(
 }
 
 // ── POST /api/escrow/:id/admin-ruling ─────────────────────────────────────────
-// TODO: add role guard middleware to restrict to admin role only.
 
+/// Admin issues a ruling on a disputed escrow.
+/// TODO: add role guard middleware to restrict to admin role only.
+#[utoipa::path(
+    post,
+    path = "/api/escrow/{id}/admin-ruling",
+    params(
+        ("id" = Uuid, Path, description = "Escrow transaction ID"),
+    ),
+    request_body = AdminRulingRequest,
+    responses(
+        (status = 200, description = "Ruling applied",        body = EscrowResponse),
+        (status = 400, description = "Bad request / invalid state transition"),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Escrow"
+)]
 pub async fn admin_ruling(
     State(app):        State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
@@ -233,8 +320,20 @@ pub async fn admin_ruling(
 }
 
 // ── POST /api/webhooks/flutterwave ─────────────────────────────────────────────
-// Public route — no auth. HMAC verified inside before any processing.
 
+/// Flutterwave payment webhook. Public route — verified via HMAC hash header.
+#[utoipa::path(
+    post,
+    path = "/api/webhooks/flutterwave",
+    responses(
+        (status = 200, description = "Webhook processed",     body = EscrowResponse),
+        (status = 400, description = "Invalid payload or charge mismatch"),
+        (status = 401, description = "Invalid webhook signature"),
+        (status = 404, description = "Escrow not found for tx_ref"),
+        (status = 502, description = "Flutterwave verification error"),
+    ),
+    tag = "Webhooks"
+)]
 pub async fn flutterwave_webhook(
     State(app): State<Arc<AppState>>,
     headers:    HeaderMap,
@@ -267,7 +366,6 @@ pub async fn flutterwave_webhook(
         ("charge.completed", "successful") => EscrowAction::PaymentConfirmed,
         ("charge.completed", "failed") | ("charge.failed", _) => EscrowAction::PaymentFailed,
         _ => {
-            // Unknown event — return 200 so Flutterwave stops retrying
             return (
                 StatusCode::OK,
                 format!("Ignored: {}/{}", webhook.event, webhook.data.status),
@@ -276,7 +374,7 @@ pub async fn flutterwave_webhook(
         }
     };
 
-    // 5. Re-verify with Flutterwave API (never trust webhook payload alone)
+    // 5. Re-verify with Flutterwave API
     match app.flutterwave.verify_charge(
         &webhook.data.id.to_string(),
         &webhook.data.status,

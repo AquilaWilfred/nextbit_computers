@@ -8,7 +8,6 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 // ── Error Type ─────────────────────────────────────────────────────────────────
-// Mirrors EscrowError but covers Daraja API failures and payment mismatches.
 
 #[derive(Debug, thiserror::Error)]
 pub enum DarajaError {
@@ -47,33 +46,28 @@ pub enum DarajaError {
 #[derive(Debug, Clone, FromRow)]
 pub struct DarajaEscrowRecord {
     pub id:                     Uuid,
-    pub escrow_id:              Uuid,   // FK → escrow_transactions.id
+    pub escrow_id:              Uuid,
 
-    // C2B / STK Push fields
-    pub mpesa_checkout_id:      Option<String>,  // CheckoutRequestID from STK push
-    pub mpesa_merchant_id:      Option<String>,  // MerchantRequestID
-    pub mpesa_receipt:          Option<String>,  // Mpesa receipt e.g. OFI2XXXXXXX
-    pub buyer_phone:            Option<String>,  // 2547XXXXXXXX
+    pub mpesa_checkout_id:      Option<String>,
+    pub mpesa_merchant_id:      Option<String>,
+    pub mpesa_receipt:          Option<String>,
+    pub buyer_phone:            Option<String>,
 
-    // B2C payout fields (seller release or buyer refund)
     pub b2c_conversation_id:    Option<String>,
     pub b2c_originator_id:      Option<String>,
     pub b2c_receipt:            Option<String>,
     pub b2c_recipient_phone:    Option<String>,
 
-    // Tax remittance
     pub tax_conversation_id:    Option<String>,
     pub tax_receipt:            Option<String>,
     pub tax_amount_cents:       Option<i64>,
     pub tax_remitted_at:        Option<DateTime<Utc>>,
 
-    // Amounts (cents = KES * 100)
     pub gross_amount_cents:     i64,
     pub fee_cents:              i64,
     pub tax_cents:              i64,
-    pub net_amount_cents:       i64,    // what seller actually receives
+    pub net_amount_cents:       i64,
 
-    // Status tracking
     pub stk_push_initiated_at:  Option<DateTime<Utc>>,
     pub payment_confirmed_at:   Option<DateTime<Utc>>,
     pub payout_initiated_at:    Option<DateTime<Utc>>,
@@ -87,40 +81,54 @@ pub struct DarajaEscrowRecord {
 
 // ── DTOs ───────────────────────────────────────────────────────────────────────
 
-/// Buyer initiates payment via STK push
-#[derive(Debug, Deserialize)]
+/// Buyer initiates payment via STK push.
+///
+/// `buyer_phone` is optional — if omitted the server uses the
+/// authenticated user's phone number from their profile.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct DarajaPaymentRequest {
-    // Optional override — if omitted, server will use authenticated user's phone
-    pub buyer_phone:  Option<String>, // 07XXXXXXXX or 2547XXXXXXXX — normalised internally
-    pub escrow_id:    Uuid,
+    /// Kenyan phone number: `07XXXXXXXX`, `+2547XXXXXXXX`, or `2547XXXXXXXX`.
+    /// Normalised to `2547XXXXXXXX` internally. Omit to use profile phone.
+    pub buyer_phone: Option<String>,
+    /// UUID of the escrow to fund.
+    pub escrow_id:   Uuid,
 }
 
-/// Response after STK push initiated
-#[derive(Debug, Serialize)]
+/// Returned immediately after an STK push is initiated.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct DarajaPaymentInitiated {
-    pub escrow_id:          Uuid,
+    /// UUID of the escrow being funded.
+    pub escrow_id:           Uuid,
+    /// Safaricom CheckoutRequestID — use to poll status if needed.
     pub checkout_request_id: String,
-    pub message:            String,    // "Check your phone for M-Pesa prompt"
+    /// Human-readable prompt, e.g. "Check your phone for M-Pesa prompt".
+    pub message:             String,
 }
 
-/// Payout request (internal — triggered by state machine)
+/// Internal payout request — triggered by the state machine, not exposed directly.
 #[derive(Debug)]
 pub struct DarajaPayoutRequest {
-    pub escrow_id:    Uuid,
-    pub phone:        String,
-    pub amount_kes:   u64,
-    pub is_refund:    bool,    // true = refund to buyer, false = payout to seller
+    pub escrow_id:  Uuid,
+    pub phone:      String,
+    pub amount_kes: u64,
+    pub is_refund:  bool,
 }
 
-/// Daraja escrow summary for API responses
-#[derive(Debug, Serialize, Clone)]
+/// Daraja escrow summary returned in API responses.
+#[derive(Debug, Serialize, Clone, utoipa::ToSchema)]
 pub struct DarajaEscrowResponse {
-    pub escrow_id:          Uuid,
-    pub gross_amount:       String,     // KES string, e.g. "5000.00"
-    pub fee_amount:         String,
-    pub tax_amount:         String,
-    pub net_amount:         String,
-    pub mpesa_receipt:      Option<String>,
+    /// UUID of the parent escrow transaction.
+    pub escrow_id:            Uuid,
+    /// Total amount charged to buyer in KES, e.g. `"5000.00"`.
+    pub gross_amount:         String,
+    /// Platform + Daraja fee in KES.
+    pub fee_amount:           String,
+    /// KRA withholding tax in KES.
+    pub tax_amount:           String,
+    /// Amount seller actually receives in KES.
+    pub net_amount:           String,
+    /// M-Pesa receipt number once payment is confirmed.
+    pub mpesa_receipt:        Option<String>,
     pub payment_confirmed_at: Option<DateTime<Utc>>,
     pub payout_completed_at:  Option<DateTime<Utc>>,
     pub refund_completed_at:  Option<DateTime<Utc>>,
@@ -131,7 +139,6 @@ impl From<DarajaEscrowRecord> for DarajaEscrowResponse {
         fn cents_to_kes_str(cents: i64) -> String {
             format!("{:.2}", cents as f64 / 100.0)
         }
-
         Self {
             escrow_id:            r.escrow_id,
             gross_amount:         cents_to_kes_str(r.gross_amount_cents),
@@ -148,11 +155,10 @@ impl From<DarajaEscrowRecord> for DarajaEscrowResponse {
 
 // ── Phone normalisation ────────────────────────────────────────────────────────
 
-/// Normalise Kenyan phone to Daraja format: 2547XXXXXXXX
-/// Accepts: 07XXXXXXXX, +2547XXXXXXXX, 2547XXXXXXXX
+/// Normalise a Kenyan phone number to Daraja format: `2547XXXXXXXX`.
+/// Accepts `07XXXXXXXX`, `+2547XXXXXXXX`, and `2547XXXXXXXX`.
 pub fn normalise_phone(raw: &str) -> Result<String, DarajaError> {
     let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
-
     match digits.len() {
         10 if digits.starts_with('0') => Ok(format!("254{}", &digits[1..])),
         12 if digits.starts_with("254") => Ok(digits),

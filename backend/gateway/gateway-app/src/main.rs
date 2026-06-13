@@ -2,6 +2,7 @@ mod auth;
 mod handlers;
 mod middleware;
 mod models;
+mod mywallet;
 mod redis_helpers;
 mod services;
 mod state;
@@ -20,7 +21,7 @@ use tracing::info;
 use hyper::header::{HeaderValue, AUTHORIZATION, CONTENT_TYPE, ACCEPT, COOKIE};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use handlers::{alerts, assets, escrow as escrow_handlers, debug, device, health, probe, proxy, scan, version, ws, ws_technician};
+use handlers::{alerts, assets, escrow as escrow_handlers, daraja_escrow as daraja_escrow_handlers, mywallet as mywallet_handlers, debug, device, health, probe, proxy, scan, version, ws, ws_technician};
 use redis_helpers::with_redis;
 use state::AppState;
 
@@ -30,12 +31,144 @@ use utoipa_scalar::{Scalar, Servable as ScalarServable};
 #[derive(OpenApi)]
 #[openapi(
     paths(
-        // This links directly to the macro you just wrote!
-        handlers::health::health_handler, 
+        // ── System ───────────────────────────────────────────────────────────
+        health::health_handler,
+
+        // ── Proxy / ML ───────────────────────────────────────────────────────
+        proxy::proxy_catalogue,
+        proxy::ml_forecast,
+        proxy::ml_hardware,
+
+        // ── WebSocket ────────────────────────────────────────────────────────
+        ws::ws_announcements,
+        ws::ws_customers,
+        ws::ws_admin_stats,
+        ws::ws_settings,
+
+        // ── Devices / Scans ──────────────────────────────────────────────────
+        scan::get_device_scans,
+        scan::get_scan,
+        device::get_all_devices,
+        device::get_device,
+
+
+        // ── Probe ────────────────────────────────────────────────────────────
+        version::get_version,
+
+        // ── Escrow (Flutterwave) ─────────────────────────────────────────────
+        escrow_handlers::create_escrow,
+        escrow_handlers::initiate_payment,
+        escrow_handlers::get_escrow,
+        escrow_handlers::confirm_delivery,
+        escrow_handlers::raise_dispute,
+        escrow_handlers::admin_ruling,
+        escrow_handlers::flutterwave_webhook,
+
+        // ── Escrow (Daraja / M-Pesa) ─────────────────────────────────────────
+        daraja_escrow_handlers::initiate_daraja_payment,
+        daraja_escrow_handlers::stk_callback,
+        daraja_escrow_handlers::c2b_validation,
+        daraja_escrow_handlers::c2b_confirmation,
+        daraja_escrow_handlers::b2c_result,
+        daraja_escrow_handlers::b2c_timeout,
+        daraja_escrow_handlers::tax_result,
+        daraja_escrow_handlers::balance_result,
+        daraja_escrow_handlers::orginfo_result,
+        daraja_escrow_handlers::txstatus_result,
+        daraja_escrow_handlers::admin_release_payout,
+        daraja_escrow_handlers::admin_trigger_refund,
+
+        // ── MyWallet ─────────────────────────────────────────────────────────
+        mywallet_handlers::get_my_wallet,
+        mywallet_handlers::load_wallet,
+        mywallet_handlers::withdraw_from_wallet,
+        mywallet_handlers::pay_order,
+        mywallet_handlers::payout_seller,
+        mywallet_handlers::get_wallet_transactions,
+        mywallet_handlers::wallet_stk_callback,
+        mywallet_handlers::wallet_b2c_result,
+
+        // ── Assets ───────────────────────────────────────────────────────────────────
+        assets::register_asset,
+        assets::list_assets,
+        assets::get_asset,
+        assets::update_asset,
+        assets::delete_asset,
+        assets::get_full_report,
+
+        // ── Alerts ───────────────────────────────────────────────────────────────────
+        alerts::get_alerts,
+
+        // ── WebSocket (technician proxy) ─────────────────────────────────────────────
+        ws_technician::proxy_ws_technician,
+    ),
+    components(
+        schemas(
+            // ── Escrow (Flutterwave - deprecated) models ───────────────────────────────────────────────
+            crate::models::escrow::EscrowState,
+            crate::models::escrow::CreateEscrowRequest,
+            crate::models::escrow::InitiatePaymentRequest,
+            crate::models::escrow::InitiatePaymentResponse,
+            crate::models::escrow::RaiseDisputeRequest,
+            crate::models::escrow::AdminRulingRequest,
+            crate::models::escrow::AdminRuling,
+            crate::models::escrow::EscrowResponse,
+
+            // ── Daraja Escrow ─────────────────────────────────────────────────
+            daraja_escrow_handlers::StkPushResponse,
+            daraja_escrow_handlers::PayoutStatusResponse,
+            daraja_escrow_handlers::RefundStatusResponse,
+            daraja_escrow_handlers::ErrorResponse,
+            daraja_escrow_handlers::AdminReleaseRequest,
+            daraja_escrow_handlers::AdminRefundRequest,
+
+            // ── Daraja Escrow Models ──────────────────────────────────────────────────────
+            crate::models::daraja_escrow::DarajaPaymentRequest,
+            crate::models::daraja_escrow::DarajaPaymentInitiated,
+            crate::models::daraja_escrow::DarajaEscrowResponse,
+
+            // ── Assets ───────────────────────────────────────────────────────────────────
+            assets::AssetResponse,
+            assets::AssetListResponse,
+            assets::AssetUpdatedResponse,
+            assets::AssetDeletedResponse,
+            assets::FullReportResponse,
+            assets::AssetErrorResponse,
+
+            // ── Devices ──────────────────────────────────────────────────────────────────
+            device::DeviceListResponse,
+            device::DeviceErrorResponse,
+
+            // ── Alerts ───────────────────────────────────────────────────────────────────
+            alerts::AlertListResponse,
+            alerts::AlertErrorResponse,
+        ),
+        // security_schemes(
+        //     ("bearerAuth" = (type = "http", scheme = "bearer", bearer_format = "JWT"))
+        // )
     ),
     tags(
-        (name = "System Diagnostics", description = "Core platform infrastructure health status checks")
-    )
+        // ── Infrastructure ────────────────────────────────────────────────
+        (name = "System Diagnostics",          description = "Core platform infrastructure health status checks"),
+        (name = "Proxy",                       description = "Reverse proxy to downstream services"),
+        (name = "ML",                          description = "Machine learning inference endpoints"),
+        (name = "WebSocket",                   description = "Real-time WebSocket endpoints"),
+
+        // ── Devices & Assets ──────────────────────────────────────────────
+        (name = "Devices",                     description = "Device and scan management"),
+        (name = "Assets",                      description = "Asset registration and full device reports"),
+        (name = "Probe",                       description = "Probe agent registration, scanning and versioning"),
+
+        // ── Payments ──────────────────────────────────────────────────────
+        (name = "Escrow",                      description = "Escrow transaction lifecycle management"),
+        (name = "Escrow · Daraja",             description = "M-Pesa STK push payments and admin payout / refund triggers"),
+        (name = "Escrow · Daraja · Callbacks", description = "Inbound Safaricom webhook callbacks — not for direct client use"),
+        (name = "Webhooks",                    description = "Inbound payment and event webhooks"),
+        (name = "MyWallet",                    description = "M-Pesa backed wallet — load, pay orders, withdraw and transaction history"),
+
+        // ── Proxied Services─────────────────────────────────────────────
+        (name = "B2B",                         description = "B2B supplier portal — proxied to catalogue service. See catalogue API docs for full schema details."),
+    ),  
 )]
 pub struct ApiDoc;
 
@@ -182,7 +315,7 @@ async fn main() -> Result<()> {
         .route("/api/wishlist/*path",                    any(proxy::proxy_catalogue))
         .route("/api/delivery",                          any(proxy::proxy_catalogue))
         .route("/api/delivery/*path",                    any(proxy::proxy_catalogue))
-        .route("/api/technician/ws/:user_id", get(ws_technician::proxy_ws_technician))
+        .route("/api/technician/ws/:user_id",            get(ws_technician::proxy_ws_technician))
         .route("/api/admin/customers",                   any(proxy::proxy_catalogue))
         .route("/api/admin/customers/ws",                get(ws::ws_customers))
         .route("/api/ws/admin/stats",                    get(ws::ws_admin_stats))
@@ -208,6 +341,9 @@ async fn main() -> Result<()> {
         .route("/api/escrow/:id/confirm-delivery",       post(escrow_handlers::confirm_delivery))
         .route("/api/escrow/:id/dispute",                post(escrow_handlers::raise_dispute))
         .route("/api/escrow/:id/admin-ruling",           post(escrow_handlers::admin_ruling))
+        .route("/api/mywallet/pay-order",                post(mywallet_handlers::pay_order))
+        .route("/api/mywallet/payout",                   post(mywallet_handlers::payout_seller))
+        .route("/api/mywallet/transactions",             get(mywallet_handlers::get_wallet_transactions))
         .merge(routes::daraja_escrow::daraja_escrow_api_routes())
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),

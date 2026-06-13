@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct ProbeSubmit {
     pub device_id: Option<String>,
     pub machine_id: Option<String>,
@@ -30,14 +30,14 @@ pub struct ProbeSubmit {
     pub os_type: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct Score {
     pub pct: u32,
     pub overall: String,
     pub checks: Vec<Check>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct Check {
     pub name: String,
     pub passed: bool,
@@ -45,14 +45,14 @@ pub struct Check {
     pub weight: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ProbeResponse {
     pub device_id: String,
     pub scan_id: String,
     pub is_new_device: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]
+#[derive(Debug, Deserialize, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct Device {
     pub id: Uuid,
     pub device_id: String,
@@ -66,7 +66,7 @@ pub struct Device {
     pub last_seen: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]
+#[derive(Debug, Deserialize, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct Scan {
     pub id: Uuid,
     pub device_id: Uuid,

@@ -9,7 +9,7 @@ use crate::services::fee::PaymentMethod;
 
 // ── DB Rows ────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, utoipa::ToSchema)]
 pub struct NextbitCard {
     pub id:            Uuid,
     pub user_id:       Uuid,
@@ -26,7 +26,7 @@ pub struct NextbitCard {
     pub updated_at:    DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, utoipa::ToSchema)]
 #[sqlx(type_name = "wallet_tx_type", rename_all = "snake_case")]
 pub enum WalletTxType {
     LoadMpesa,
@@ -40,7 +40,7 @@ pub enum WalletTxType {
     FwFeeShare,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, utoipa::ToSchema)]
 #[sqlx(type_name = "wallet_tx_status", rename_all = "snake_case")]
 pub enum WalletTxStatus {
     Pending,
@@ -49,7 +49,7 @@ pub enum WalletTxStatus {
     Reversed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, utoipa::ToSchema)]
 pub struct WalletTransaction {
     pub id:             Uuid,
     pub card_id:        Uuid,
@@ -71,39 +71,39 @@ pub struct WalletTransaction {
 
 // ── Request / Response DTOs ────────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct LoadWalletRequest {
     pub amount_kes:    f64,
     pub method:        PaymentMethod,
     pub phone_number:  Option<String>,  // required for M-Pesa
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct PayOrderRequest {
     pub escrow_id:  Uuid,
     pub amount_kes: f64,
-    // no method — order payment is ALWAYS from wallet
-    // method only applies at load time
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct WithdrawRequest {
-    pub amount_kes:    f64,
-    pub bank_code:     Option<String>,
-    pub account_number:Option<String>,
-    pub phone_number:  Option<String>,  // for M-Pesa withdrawal
+    pub amount_kes:     f64,
+    pub bank_code:      Option<String>,
+    pub account_number: Option<String>,
+    pub phone_number:   Option<String>,  // for M-Pesa withdrawal
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct CardResponse {
-    pub id:             Uuid,
-    pub card_number:    String,         // masked: NB43 **** **** 1234
-    pub card_holder:    String,
-    pub expiry:         String,         // "MM/YY"
-    pub balance_kes:    f64,
-    pub has_van:        bool,
-    pub fw_van:         Option<String>,
-    pub fw_van_bank:    Option<String>,
+    pub id:          Uuid,
+    /// Masked card number, e.g. `NB43 **** **** 1234`
+    pub card_number: String,
+    pub card_holder: String,
+    /// Format: `MM/YY`
+    pub expiry:      String,
+    pub balance_kes: f64,
+    pub has_van:     bool,
+    pub fw_van:      Option<String>,
+    pub fw_van_bank: Option<String>,
 }
 
 impl From<NextbitCard> for CardResponse {
@@ -126,17 +126,18 @@ impl From<NextbitCard> for CardResponse {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct WalletTxResponse {
-    pub id:           Uuid,
-    pub tx_type:      WalletTxType,
-    pub status:       WalletTxStatus,
-    pub amount_kes:   f64,
-    pub fee_kes:      f64,
-    pub net_kes:      f64,
-    pub balance_kes:  f64,
-    pub description:  Option<String>,
-    pub created_at:   DateTime<Utc>,
+    pub id:          Uuid,
+    pub tx_type:     WalletTxType,
+    pub status:      WalletTxStatus,
+    pub amount_kes:  f64,
+    pub fee_kes:     f64,
+    pub net_kes:     f64,
+    /// Balance after this transaction settled
+    pub balance_kes: f64,
+    pub description: Option<String>,
+    pub created_at:  DateTime<Utc>,
 }
 
 impl From<WalletTransaction> for WalletTxResponse {
@@ -155,19 +156,21 @@ impl From<WalletTransaction> for WalletTxResponse {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct FeePreviewResponse {
     pub gross_kes:        f64,
-    pub fw_fee_kes:       f64,   // always 0 for wallet payments
-    pub platform_fee_kes: f64,   // nextbit tiered fee from seller
-    pub buyer_pays_kes:   f64,   // always = gross (no extra charge)
-    pub seller_gets_kes:  f64,   // after platform fee deducted
+    /// Always `0.0` for wallet-funded payments
+    pub fw_fee_kes:       f64,
+    pub platform_fee_kes: f64,
+    /// Always equal to `gross_kes` — buyer is never surcharged
+    pub buyer_pays_kes:   f64,
+    pub seller_gets_kes:  f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct LoadFeePreviewResponse {
-    pub you_send_kes:     f64,   // what customer inputs
-    pub fw_fee_kes:       f64,   // flutterwave takes this
-    pub wallet_credit_kes:f64,   // what lands in wallet
-    pub method:           String,
+    pub you_send_kes:      f64,
+    pub fw_fee_kes:        f64,
+    pub wallet_credit_kes: f64,
+    pub method:            String,
 }

@@ -1,9 +1,37 @@
-use axum::{extract::Path, Json};
+use axum::{extract::Path, extract::State, Json};
+use serde::Serialize;
+use std::sync::Arc;
 use crate::models::probe::Device;
 use crate::state::AppState;
-use axum::extract::State;
-use std::sync::Arc;
 
+// ── Inline schemas ────────────────────────────────────────────────────────────
+
+/// List of devices.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct DeviceListResponse {
+    pub devices: Vec<Device>,
+}
+
+/// Generic error body.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct DeviceErrorResponse {
+    pub error: String,
+}
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
+/// List all registered devices.
+///
+/// Returns up to 1 000 devices ordered by `last_seen` descending.
+#[utoipa::path(
+    get,
+    path = "/api/devices",
+    tag = "Devices",
+    responses(
+        (status = 200, description = "Device list",    body = Vec<Device>),
+        (status = 500, description = "Database error", body = DeviceErrorResponse),
+    )
+)]
 pub async fn get_all_devices(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Device>>, axum::http::StatusCode> {
@@ -17,6 +45,20 @@ pub async fn get_all_devices(
     Ok(Json(devices))
 }
 
+/// Get a single device by its device ID.
+#[utoipa::path(
+    get,
+    path = "/api/devices/{id}",
+    tag = "Devices",
+    params(
+        ("id" = String, Path, description = "The device_id of the device to retrieve")
+    ),
+    responses(
+        (status = 200, description = "Device found",   body = Device),
+        (status = 404, description = "Device not found"),
+        (status = 500, description = "Database error", body = DeviceErrorResponse),
+    )
+)]
 pub async fn get_device(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,

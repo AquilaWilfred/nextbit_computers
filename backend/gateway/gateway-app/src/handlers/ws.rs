@@ -15,6 +15,15 @@ use tokio::net::TcpStream;
 
 // ── Announcements ────────────────────────────────────────────────────────────
 
+/// WebSocket stream of live announcements, refreshed every 60 seconds.
+#[utoipa::path(
+    get,
+    path = "/api/ws/announcements",
+    responses(
+        (status = 101, description = "WebSocket upgrade — streams announcement payloads as JSON"),
+    ),
+    tag = "WebSocket"
+)]
 pub async fn ws_announcements(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
@@ -59,6 +68,16 @@ async fn fetch_announcements(state: &Arc<AppState>) -> serde_json::Value {
 
 // ── Customers WS proxy ───────────────────────────────────────────────────────
 
+/// WebSocket proxy to the Catalogue service customer feed (auth required).
+#[utoipa::path(
+    get,
+    path = "/api/admin/customers/ws",
+    responses(
+        (status = 101, description = "WebSocket upgrade — proxies customer events from Catalogue service"),
+        (status = 502, description = "Bad gateway — upstream WebSocket connection failed"),
+    ),
+    tag = "WebSocket"
+)]
 pub async fn ws_customers(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
@@ -71,7 +90,6 @@ pub async fn ws_customers(
 }
 
 async fn proxy_ws(client: WebSocket, upstream_url: String) {
-    // Connect upstream with explicit type
     let upstream: WebSocketStream<MaybeTlsStream<TcpStream>> =
         match tokio_tungstenite::connect_async(&upstream_url).await {
             Ok((ws, _)) => ws,
@@ -84,9 +102,7 @@ async fn proxy_ws(client: WebSocket, upstream_url: String) {
     let (mut client_tx, mut client_rx) = client.split();
     let (mut up_tx, mut up_rx) = upstream.split();
 
-    // Channel: browser messages → upstream sender task
     let (browser_tx, mut browser_rx) = tokio::sync::mpsc::unbounded_channel::<TMsg>();
-    // Channel: upstream messages → browser sender task
     let (upstr_tx, mut upstr_rx) = tokio::sync::mpsc::unbounded_channel::<AMsg>();
 
     // Task 1: read from browser, forward to channel
@@ -131,7 +147,6 @@ async fn proxy_ws(client: WebSocket, upstream_url: String) {
         }
     });
 
-    // Stop all tasks when any one finishes
     tokio::select! {
         _ = t1 => {}
         _ = t2 => {}
@@ -140,7 +155,16 @@ async fn proxy_ws(client: WebSocket, upstream_url: String) {
     }
 }
 
-/// /ws/admin/stats — pushes live payment/stats updates
+/// WebSocket proxy to the Catalogue service admin stats feed (auth required).
+#[utoipa::path(
+    get,
+    path = "/api/ws/admin/stats",
+    responses(
+        (status = 101, description = "WebSocket upgrade — proxies live payment and stats events"),
+        (status = 502, description = "Bad gateway — upstream WebSocket connection failed"),
+    ),
+    tag = "WebSocket"
+)]
 pub async fn ws_admin_stats(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
@@ -152,7 +176,16 @@ pub async fn ws_admin_stats(
     ws.on_upgrade(move |socket| proxy_ws(socket, upstream))
 }
 
-/// /api/settings/ws — real-time settings sync (public, no auth required)
+/// WebSocket proxy for real-time settings sync (public, no auth required).
+#[utoipa::path(
+    get,
+    path = "/api/settings/ws",
+    responses(
+        (status = 101, description = "WebSocket upgrade — streams real-time settings changes"),
+        (status = 502, description = "Bad gateway — upstream WebSocket connection failed"),
+    ),
+    tag = "WebSocket"
+)]
 pub async fn ws_settings(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
