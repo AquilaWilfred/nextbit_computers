@@ -14,20 +14,49 @@ interface UseFetchResult<T> {
   refetch: () => void;
 }
 
+const _fetchCache = new Map<string, { data: any; ts: number }>();
+const _fetchInflight = new Map<string, Promise<any>>();
+const FETCH_TTL = 30_000;
+
+async function cachedFetch<T>(path: string): Promise<T> {
+  const now = Date.now();
+  const hit = _fetchCache.get(path);
+  if (hit && now - hit.ts < FETCH_TTL) return hit.data as T;
+  const inflight = _fetchInflight.get(path);
+  if (inflight) return inflight as Promise<T>;
+  const promise = fetch(path, { credentials: 'include' })
+    .then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
+    .then(data => {
+      _fetchCache.set(path, { data, ts: Date.now() });
+      _fetchInflight.delete(path);
+      return data as T;
+    })
+    .catch(err => {
+      _fetchInflight.delete(path);
+      throw err;
+    });
+  _fetchInflight.set(path, promise);
+  return promise;
+}
+
 export function useFetch<T>(path: string, enabled = true): UseFetchResult<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const memHit = _fetchCache.get(path);
+  const [data, setData] = useState<T | null>(memHit?.data ?? null);
+  const [isLoading, setIsLoading] = useState(enabled && !memHit);
   const [error, setError] = useState<string | null>(null);
+  const hasFetched = useRef(!!memHit);
 
   const fetchData = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || hasFetched.current) return;
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(path, { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json() as T;
+      const result = await cachedFetch<T>(path);
       setData(result);
+      hasFetched.current = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
       if (msg.includes('401')) {
@@ -44,7 +73,16 @@ export function useFetch<T>(path: string, enabled = true): UseFetchResult<T> {
     fetchData();
   }, [fetchData]);
 
-  return { data, isLoading, error, refetch: fetchData };
+  return {
+    data,
+    isLoading,
+    error,
+    refetch: () => {
+      hasFetched.current = false;
+      _fetchCache.delete(path);
+      fetchData();
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +131,38 @@ export function useMutation<TInput, TOutput>(
 }
 
 // ---------------------------------------------------------------------------
+// Module-level request cache — shared across ALL hook instances
+// Prevents duplicate requests even when multiple components mount simultaneously
+const _proxyCache = new Map<string, { data: any; ts: number }>();
+const _proxyInflight = new Map<string, Promise<any>>();
+const PROXY_TTL = 30_000; // 30 seconds
+
+async function cachedProxyGet<T>(path: string): Promise<T> {
+  const now = Date.now();
+  const hit = _proxyCache.get(path);
+  if (hit && now - hit.ts < PROXY_TTL) return hit.data as T;
+
+  const inflight = _proxyInflight.get(path);
+  if (inflight) return inflight as Promise<T>;
+
+  const promise = proxyClient.get<T>(path).then(data => {
+    _proxyCache.set(path, { data, ts: Date.now() });
+    _proxyInflight.delete(path);
+    return data;
+  }).catch(err => {
+    _proxyInflight.delete(path);
+    throw err;
+  });
+
+  _proxyInflight.set(path, promise);
+  return promise;
+}
+
+export function invalidateProxyCache(path: string) {
+  _proxyCache.delete(path);
+}
+
+// ---------------------------------------------------------------------------
 // useProxyFetch - OPTIMIZED: Automatically waits for auth initialization
 // For any relative /api/* path that needs cookie auth
 // ---------------------------------------------------------------------------
@@ -121,27 +191,25 @@ export function useProxyFetch<T>(
     return isInitialized && !!user;
   }, [enabled, requireAuth, isInitialized, user]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
     if (!shouldFetch()) return;
-    
-    // If auth is required but not ready, wait for it
+    if (hasFetched.current && !force) return;
+
     if (requireAuth && (!isInitialized || !user)) {
       await waitForAuth();
-      // After waiting, re-check if we should proceed
       if (!shouldFetch()) return;
     }
-    
+
     setIsLoading(true);
     setError(null);
     try {
-      const result = await proxyClient.get<T>(path);
+      const result = await cachedProxyGet<T>(path);
       setData(result);
       hasFetched.current = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
       if (msg.includes('401')) {
         setData(null);
-        // Don't set error for 401 - it's expected before auth
         if (isInitialized && user) {
           setError('Session expired. Please login again.');
         }
@@ -153,16 +221,20 @@ export function useProxyFetch<T>(
     }
   }, [path, shouldFetch, requireAuth, isInitialized, user, waitForAuth]);
 
+  // Single effect — fetch once on mount when ready
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Refetch when auth state changes (e.g., after login)
+  // Refetch when user logs IN (null -> user transition only)
+  const prevUserRef = useRef<typeof user>(null);
   useEffect(() => {
-    if (isInitialized && user && hasFetched.current) {
-      fetchData();
+    if (isInitialized && user && !prevUserRef.current) {
+      hasFetched.current = false;
+      fetchData(true);
     }
-  }, [isInitialized, user, fetchData]);
+    prevUserRef.current = user ?? null;
+  }, [isInitialized, user]);
 
   return { data, isLoading, error, refetch: fetchData };
 }

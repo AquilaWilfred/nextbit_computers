@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
+import withBundleAnalyzer from "@next/bundle-analyzer";
 
-// Match env priority with proxy.ts: explicit prod envs first, then fallback to localhost for dev
-// Prefer explicit public vars used during Vercel builds, then fall back to other names.
 const CATALOGUE =
   process.env.NEXT_PUBLIC_CATALOGUE_URL ??
   process.env.CATALOGUE_URL ??
@@ -19,7 +18,16 @@ const GATEWAY =
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['192.168.100.1', '192.168.100.2', 'localhost'],
   experimental: {
-    optimizePackageImports: ['lucide-react'],
+    optimizePackageImports: [
+      'lucide-react',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-tooltip',
+      'recharts',
+      'date-fns',
+    ],
   },
   images: {
     formats: ['image/webp', 'image/avif'],
@@ -33,7 +41,6 @@ const nextConfig: NextConfig = {
   },
   compress: true,
   turbopack: {},
-
   async rewrites() {
     return [
       { source: '/ws/:path*', destination: `${CATALOGUE}/ws/:path*` },
@@ -63,8 +70,12 @@ const nextConfig: NextConfig = {
       { source: '/api/vip/:path*', destination: `${CATALOGUE}/api/vip/:path*` },
       { source: '/api/admin/vip', destination: `${CATALOGUE}/api/admin/vip` },
       { source: '/api/admin/vip/:path*', destination: `${CATALOGUE}/api/admin/vip/:path*` },
+      { source: '/api/cards/:path*', destination: `${CATALOGUE}/api/cards/:path*` },
+      { source: '/api/wallet/:path*', destination: `${CATALOGUE}/api/wallet/:path*` },
     ];
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+})(nextConfig);

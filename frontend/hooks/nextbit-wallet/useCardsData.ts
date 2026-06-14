@@ -33,15 +33,17 @@ export function useCardsData(skip = false): UseCardsDataReturn {
     setError(null);
     
     try {
-      const productsData = await cardsService.getProducts();
-      setProducts(productsData);
-
-      const [applicationsResult, virtualCardResult, transactionsResult, statsResult] = await Promise.allSettled([
+      const [productsResult, applicationsResult, virtualCardResult, transactionsResult, statsResult] = await Promise.allSettled([
+        cardsService.getProducts(),
         cardsService.getApplications(),
         cardsService.getVirtualCard(),
         cardsService.getTransactions(),
         cardsService.getUserStats(),
       ]);
+
+      if (productsResult.status === 'fulfilled') {
+        setProducts(productsResult.value);
+      }
 
       if (applicationsResult.status === 'fulfilled') {
         setApplications(applicationsResult.value);
