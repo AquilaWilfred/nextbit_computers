@@ -16,7 +16,7 @@ interface MobileMenuProps {
   getCategoryIcon: (cat: Category) => React.ReactNode;
   isAuthenticated: boolean;
   user: { name?: string; email?: string; role?: string } | null;
-  storeName: string;  // ADD THIS
+  storeName: string; 
 }
 
 export function MobileMenu({ 
@@ -34,6 +34,7 @@ export function MobileMenu({
   const [searchQuery, setSearchQuery] = useState("");
 
   const getChildren = (parentId: string) => orderedCategories.filter((c) => c.parentId === parentId);
+  const authProtectedPaths = new Set(["/insurance", "/e-waste", "/repairs", "/conflicts", "/listings", "/nextbit-wallet", "/vip"]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,17 +128,42 @@ export function MobileMenu({
                 Crown: <Crown className="w-4 h-4" />,
                 Headphones: <Headphones className="w-4 h-4" />,
               };
+
+              const requiresAuth = !isAuthenticated && authProtectedPaths.has(href);
+              const targetHref = requiresAuth ? getLoginUrl(href) : href;
+
               return (
                 <Link
                   key={href}
-                  href={href}
+                  href={targetHref}
                   onClick={onClose}
                   className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium hover:bg-[var(--brand)]/10 hover:text-[var(--brand)] transition-colors"
                 >
                   {IconMap[icon]} {label}
+                  {requiresAuth && (
+                    <span className="ml-auto rounded-full bg-yellow-100 text-yellow-800 px-2 py-0.5 text-[10px] font-semibold">
+                      Login required
+                    </span>
+                  )}
                 </Link>
               );
             })}
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-border">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2 px-1">Help & Resolve</p>
+            <Link
+              href={isAuthenticated ? "/conflicts" : getLoginUrl("/conflicts")}
+              onClick={onClose}
+              className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium hover:bg-[var(--brand)]/10 hover:text-[var(--brand)] transition-colors"
+            >
+              Resolution Hub
+              {!isAuthenticated && (
+                <span className="ml-auto rounded-full bg-yellow-100 text-yellow-800 px-2 py-0.5 text-[10px] font-semibold">
+                  Login required
+                </span>
+              )}
+            </Link>
           </div>
 
           {isAuthenticated && (

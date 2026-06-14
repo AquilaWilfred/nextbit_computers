@@ -3,7 +3,7 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends, status, Request, Response, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select as sa_select
@@ -248,6 +248,16 @@ async def register(
     return JSONResponse(status_code=201, content={"needs_verification": True, "email": request.email, "token": verify_token_val})
 
 
+@router.get("/google")
+async def google_oauth():
+    return RedirectResponse(url="/auth?error=google_not_configured")
+
+
+@router.get("/facebook")
+async def facebook_oauth():
+    return RedirectResponse(url="/auth?error=facebook_not_configured")
+
+
 @router.post("/logout")
 async def logout(response: Response):
     response.delete_cookie(key="nextbit_token", path="/", httponly=True, samesite="lax")
@@ -465,3 +475,55 @@ async def reset_password(request: Request, db: Session = Depends(get_db)):
         await redis.delete(f"reset_code:{code}")
     
     return {"message": "Password reset successfully"}
+
+
+class OAuthUpsertRequest(BaseModel):
+    email: str
+    name: str
+    google_id: str
+    avatar: Optional[str] = None
+
+@router.post("/oauth/upsert")
+async def oauth_upsert(
+    request: Request,
+    body: OAuthUpsertRequest,
+    db: Session = Depends(get_db),
+):
+    # Verify internal call
+    api_key = request.headers.get("x-internal-key")
+    if api_key != "nextbit_internal_secret_2026":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    user = db.query(User).filter(User.email == body.email).first()
+    if user:
+        # Update last signed in
+        user.lastSignedIn = datetime.utcnow()
+        user.updatedAt = datetime.utcnow()
+        if not user.openId:
+            user.openId = body.google_id
+        if not user.emailVerified:
+            user.emailVerified = True  # Google emails are pre-verified
+        db.commit()
+        db.refresh(user)
+    else:
+        user = User(
+            email=body.email,
+            name=body.name,
+            password=None,
+            role="user",
+            openId=body.google_id,
+            loginMethod="google",
+            emailVerified=True,
+            createdAt=datetime.utcnow(),
+            updatedAt=datetime.utcnow(),
+            lastSignedIn=datetime.utcnow(),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    access_token = create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "user": {
+        "id": user.id, "email": user.email, "name": user.name,
+        "role": user.role, "is_verified": user.emailVerified,
+    }}

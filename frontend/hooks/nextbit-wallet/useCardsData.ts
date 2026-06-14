@@ -14,7 +14,7 @@ interface UseCardsDataReturn {
   refetch: () => Promise<void>;
 }
 
-export function useCardsData(): UseCardsDataReturn {
+export function useCardsData(skip = false): UseCardsDataReturn {
   const [products, setProducts] = useState<CardProduct[]>([]);
   const [applications, setApplications] = useState<CardApplication[]>([]);
   const [virtualCard, setVirtualCard] = useState<VirtualCard | null>(null);
@@ -25,7 +25,7 @@ export function useCardsData(): UseCardsDataReturn {
     totalSpent: 0,
     cardsIssued: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchAllData = useCallback(async () => {
@@ -89,6 +89,7 @@ export function useCardsData(): UseCardsDataReturn {
   }, []);
 
   useEffect(() => {
+    if (skip) return;
     fetchAllData();
   }, [fetchAllData]);
 

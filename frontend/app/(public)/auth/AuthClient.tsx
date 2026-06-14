@@ -103,6 +103,16 @@ export default function AuthClient() {
   useEffect(() => {
     if (oauthError === "google_not_configured") {
       toast.error("Google Login is not configured yet. Please use email/password.");
+    } else if (oauthError === 'google_failed') {
+      toast.error('Google sign-in failed. Please try again.');
+    } else if (oauthError === 'google_cancelled') {
+      toast.error('Google sign-in was cancelled.');
+    } else if (oauthError === 'facebook_failed') {
+      toast.error('Facebook sign-in failed. Please try again.');
+    } else if (oauthError === 'facebook_cancelled') {
+      toast.error('Facebook sign-in was cancelled.');
+    } else if (oauthError === 'facebook_no_email') {
+      toast.error('Facebook did not share your email. Please use email/password instead.');
     } else if (oauthError === "facebook_not_configured") {
       toast.error("Facebook Login is not configured yet. Please use email/password.");
     }

@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import StoreLoader from "@/components/StoreLoader";
 
 // Hooks
 import { useHomeData } from "@/hooks/home/useHomeData";
@@ -53,6 +52,9 @@ export default function Home() {
     announcements,
     liveStats,
     isLoading,
+    loadingFeatured,
+    loadingLatest,
+    loadingCategories,
   } = useHomeData();
 
   // UI state
@@ -79,10 +81,6 @@ export default function Home() {
     if (branch) setSelectedBranch(branch);
   };
 
-  if (isLoading) {
-    return <StoreLoader fullScreen />;
-  }
-
   return (
     <div className="min-h-screen flex flex-col">
       <JsonLdScripts data={jsonLdData} />
@@ -102,9 +100,9 @@ export default function Home() {
 
       <FeaturesBar settings={settings} />
       <BrandMarquee brands={settings?.brands} />
-      <CategoriesSection categories={categories} loading={isLoading} />
-      <FeaturedProducts products={featuredProducts} loading={isLoading} />
-      <LatestProducts products={latestProducts} loading={isLoading} />
+      <CategoriesSection categories={categories} loading={loadingCategories} />
+      <FeaturedProducts products={featuredProducts} loading={loadingFeatured} />
+      <LatestProducts products={latestProducts} loading={loadingLatest} />
       <LifestyleSection lifestyles={lifestyles} />
 
       <LocationSection

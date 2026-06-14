@@ -4,6 +4,8 @@
 import { useState, useCallback } from 'react';
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { ArrowLeftRight } from 'lucide-react';
+import { useAuth } from '@/hooks/auth/useAuth';
 import { useTradeInListings } from '@/hooks/listings/useTradeInListings';
 import { useTradeInStats } from '@/hooks/listings/useTradeInStats';
 import { useTradeInForm } from '@/hooks/listings/useTradeInForm';
@@ -21,14 +23,18 @@ import {
 import { toast } from 'sonner';
 
 export default function TradeInPage() {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [showForm, setShowForm] = useState(false);
   
-  const { listings, loading: listingsLoading, counts, statusFilter, setStatusFilter, refetch: refetchListings } = useTradeInListings();
-  const { stats, loading: statsLoading, refetch: refetchStats } = useTradeInStats();
+  const skip = authLoading || !isAuthenticated;
+  const { listings, loading: listingsLoading, counts, statusFilter, setStatusFilter, refetch: refetchListings } = useTradeInListings(skip, 'all');
+  const { stats, loading: statsLoading, refetch: refetchStats } = useTradeInStats(skip);
   const { formData, submitting, setSubmitting, updateField, getSubmitData, resetForm } = useTradeInForm();
   const { selectedImages, imagePreviews, addImages, removeImage, clearImages, primaryIndex, setPrimary } = useImageUpload();
 
   const isLoading = listingsLoading || statsLoading;
+
+  if (authLoading) return null;
 
   const handleSubmit = useCallback(async () => {
     const submitData = getSubmitData();
@@ -67,6 +73,29 @@ export default function TradeInPage() {
 
   if (isLoading) {
     return <TradeInSkeleton />;
+  }
+
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto px-4 py-20 text-center">
+          <div className="bg-white rounded-lg shadow-sm p-8 max-w-md mx-auto">
+            <ArrowLeftRight className="h-12 w-12 text-emerald-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">Login Required</h2>
+            <p className="text-gray-600 mb-6">Please log in to access trade-in listings.</p>
+            <button
+              onClick={() => window.location.href = "/auth"}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg hover:opacity-90 transition-opacity"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
   }
 
   return (

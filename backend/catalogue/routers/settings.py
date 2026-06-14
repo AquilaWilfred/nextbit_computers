@@ -77,8 +77,12 @@ SETTINGS = {
     "brands": ["Samsung", "Dell", "HP", "Lenovo", "Asus", "Apple", "Acer"],
 }
 
+_settings_mem_cache: dict = {}
+_settings_mem_ts: dict = {}
+
 @router.get("/public")
 async def get_public_settings(request: Request):
+    import time, json as _json
     raw = request.query_params.get("keys", "")
     multi = request.query_params.getlist("keys")
     keys = []
@@ -91,17 +95,24 @@ async def get_public_settings(request: Request):
         keys = multi
 
     cache_key = "catalogue:settings:public:" + (",".join(sorted(keys)) if keys else "all")
+    if cache_key in _settings_mem_cache and (time.time() - _settings_mem_ts.get(cache_key, 0)) < 300:
+        return _settings_mem_cache[cache_key]
     try:
         from db.redis import get_redis
         import json
         r = get_redis()
         cached = await r.get(cache_key)
         if cached:
-            return json.loads(cached)
+            result = json.loads(cached)
+            _settings_mem_cache[cache_key] = result
+            _settings_mem_ts[cache_key] = time.time()
+            return result
     except Exception:
         r = None
 
     result = {key: SETTINGS[key] for key in keys if key in SETTINGS} if keys else dict(SETTINGS)
+    _settings_mem_cache[cache_key] = result
+    _settings_mem_ts[cache_key] = time.time()
     try:
         if r:
             await r.setex(cache_key, 300, json.dumps(result))

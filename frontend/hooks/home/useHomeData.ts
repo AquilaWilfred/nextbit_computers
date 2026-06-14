@@ -38,7 +38,7 @@ export function useHomeData() {
   // Real-time announcements
   const { data: announcements } = useAnnouncements(API_ENDPOINTS.announcements);
 
-  const isLoading = loadingSettings || loadingBanners || loadingCategories;
+  const isLoading = loadingSettings; // only block on settings; sections load independently
 
   const activeBanners = (banners ?? []).filter((b) => b.active).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
@@ -55,7 +55,7 @@ export function useHomeData() {
     settings,
     announcements,
     liveStats,
-    isLoading: isLoading || loadingFeatured || loadingLatest,
+    isLoading,
     loadingFeatured,
     loadingLatest,
     loadingCategories,

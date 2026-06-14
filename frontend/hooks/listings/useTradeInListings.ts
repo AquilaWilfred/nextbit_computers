@@ -3,9 +3,9 @@ import { TradeInRequest, TradeInStatus } from '@/types/listings/listings.types';
 import { tradeInService } from '@/lib/services/listings/listing.service';
 import { toast } from 'sonner';
 
-export function useTradeInListings(initialStatus: string = 'all') {
+export function useTradeInListings(skip = false, initialStatus: string = 'all') {
   const [listings, setListings] = useState<TradeInRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
 
@@ -24,8 +24,9 @@ export function useTradeInListings(initialStatus: string = 'all') {
   }, [statusFilter]);
 
   useEffect(() => {
+    if (skip) return;
     loadListings();
-  }, [loadListings]);
+  }, [loadListings, skip]);
 
   const filteredListings = useMemo(() => {
     if (statusFilter === 'all') return listings;

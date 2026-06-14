@@ -44,12 +44,37 @@ async def get_announcements(db: Session = Depends(get_db)):
 
     return result
 
+_banners_cache = None
+_banners_cache_ts = 0.0
+
 @router.get("/banners")
 async def get_banners(db: Session = Depends(get_db)):
+    import time, json
+    global _banners_cache, _banners_cache_ts
+    if _banners_cache is not None and (time.time() - _banners_cache_ts) < 300:
+        return _banners_cache
+    try:
+        from db.redis import get_redis
+        r = get_redis()
+        cached = await r.get("catalogue:banners")
+        if cached:
+            _banners_cache = json.loads(cached)
+            _banners_cache_ts = time.time()
+            return _banners_cache
+    except Exception:
+        r = None
     rows = db.execute(text(
         'SELECT id, title, description, image, active, "order" FROM banners WHERE active = true ORDER BY "order" ASC'
     )).mappings().fetchall()
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    _banners_cache = result
+    _banners_cache_ts = time.time()
+    try:
+        if r:
+            await r.setex("catalogue:banners", 300, json.dumps(result))
+    except Exception:
+        pass
+    return result
 
 @router.get("/promotions")
 async def get_promotions(db: Session = Depends(get_db)):

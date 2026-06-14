@@ -28,7 +28,7 @@ const MOCK_REVIEWS = [
 ];
 
 export default function RepairsClient() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const userId = user?.id ?? null; // Get from auth context
   const [activeTab, setActiveTab] = useState<ActiveTab>("find");
   const [showRequestForm, setShowRequestForm] = useState(false);
@@ -68,6 +68,28 @@ export default function RepairsClient() {
     { key: "requests", label: "My requests", icon: <ClipboardList className="h-4 w-4" /> },
     { key: "history", label: "History", icon: <History className="h-4 w-4" /> },
   ];
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto px-4 py-20 text-center">
+          <div className="bg-white rounded-lg shadow-sm p-8 max-w-md mx-auto">
+            <Wrench className="h-12 w-12 text-emerald-600 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Login Required</h2>
+            <p className="text-gray-600 mb-4">Please log in to access repair & parts services.</p>
+            <button
+              onClick={() => window.location.href = "/auth"}
+              className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">

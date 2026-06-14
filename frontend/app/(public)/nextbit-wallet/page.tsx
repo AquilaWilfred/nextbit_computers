@@ -3,6 +3,7 @@
 "use client";
 
 import { useState, useCallback } from 'react';
+import { CreditCard } from 'lucide-react';
 import { useAuth } from '@/hooks/auth/useAuth';
 import { useCardsData } from '@/hooks/nextbit-wallet/useCardsData';
 import { useCardApplication } from '@/hooks/nextbit-wallet/useCardApplication';
@@ -20,8 +21,9 @@ import {
 } from '@/components/nextbit-wallet';
 
 export default function NextbitWalletPage() {
-  const { user } = useAuth();
-  const { products, applications, virtualCard, transactions, stats, loading, refetch } = useCardsData();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const skip = authLoading || !isAuthenticated;
+  const { products, applications, virtualCard, transactions, stats, loading, refetch } = useCardsData(skip);
   const [showApplicationForm, setShowApplicationForm] = useState(false);
 
   const {
@@ -67,8 +69,33 @@ export default function NextbitWalletPage() {
     return false;
   }, [user]);
 
+  if (authLoading) return null;
+
   if (loading) {
     return <CardsSkeleton />;
+  }
+
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto px-4 py-20 text-center">
+          <div className="bg-white rounded-lg shadow-sm p-8 max-w-md mx-auto">
+            <CreditCard className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">Login Required</h2>
+            <p className="text-gray-600 mb-6">Please log in to access NextBit Wallet.</p>
+            <button
+              onClick={() => window.location.href = "/auth"}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg hover:opacity-90 transition-opacity"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
   }
 
   return (

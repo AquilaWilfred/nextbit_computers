@@ -3,7 +3,7 @@ import { UserStats } from '@/types/listings/listings.types';
 import { tradeInService } from '@/lib/services/listings/listing.service';
 import { toast } from 'sonner';
 
-export function useTradeInStats() {
+export function useTradeInStats(skip = false) {
   const [stats, setStats] = useState<UserStats>({
     total_listings: 0,
     active_listings: 0,
@@ -11,7 +11,7 @@ export function useTradeInStats() {
     total_credit_earned: 0,
     total_views: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const loadStats = useCallback(async () => {
@@ -29,6 +29,7 @@ export function useTradeInStats() {
   }, []);
 
   useEffect(() => {
+      if (skip) return;
     loadStats();
   }, [loadStats]);
 

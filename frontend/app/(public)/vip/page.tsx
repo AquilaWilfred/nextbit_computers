@@ -73,7 +73,7 @@ const TIER_DISPLAY: Record<string, { label: string; color: string; price: number
 // ─────────────────── Main Page ───────────────────
 
 export default function VIPPage() {
-  const { user } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [vipServices, setVipServices] = useState<VIPService[]>([]);
   const [membership, setMembership] = useState<VIPMembership | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,8 +129,12 @@ export default function VIPPage() {
   }, [fetchMembership, fetchServices]);
 
   useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    if (isAuthenticated) {
+      fetchAllData();
+    } else {
+      setLoading(false);
+    }
+  }, [fetchAllData, isAuthenticated]);
 
   // Upgrade membership
   const upgradeMembership = async () => {
@@ -223,6 +227,30 @@ export default function VIPPage() {
       setCalculating(false);
     }
   };
+
+  if (authLoading) return null;
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto px-4 py-20 text-center">
+          <div className="bg-white rounded-lg shadow-sm p-8 max-w-md mx-auto">
+            <Crown className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">Login Required</h2>
+            <p className="text-gray-600 mb-6">Please log in to access VIP services.</p>
+            <button
+              onClick={() => window.location.href = "/auth"}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-lg hover:opacity-90 transition-opacity"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
+  }
 
   if (loading) {
     return (

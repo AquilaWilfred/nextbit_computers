@@ -147,20 +147,21 @@ export default function Navbar() {
           </div>
         </div>
 
-        {mounted && (
-          <MobileMenu
-            isOpen={mobileOpen}
-            onClose={() => setMobileOpen(false)}
-            pathname={pathname}
-            rootCategories={rootCategories}
-            orderedCategories={orderedCategories}
-            getCategoryIcon={getCategoryIcon}
-            isAuthenticated={isAuthenticated}
-            user={user}
-            storeName={storeName}
-          />
-        )}
       </header>
+
+      {mounted && (
+        <MobileMenu
+          isOpen={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          pathname={pathname}
+          rootCategories={rootCategories}
+          orderedCategories={orderedCategories}
+          getCategoryIcon={getCategoryIcon}
+          isAuthenticated={isAuthenticated}
+          user={user}
+          storeName={storeName}
+        />
+      )}
     </>
   );
 }
