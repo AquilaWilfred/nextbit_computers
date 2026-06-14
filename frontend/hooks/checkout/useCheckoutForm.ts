@@ -28,7 +28,6 @@ export function useCheckoutForm(
     setOrderNumber(number);
     setStep("payment");
   };
-
   const goToReview = () => setStep("review");
 
   return {

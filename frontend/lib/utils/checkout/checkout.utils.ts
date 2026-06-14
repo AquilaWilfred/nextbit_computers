@@ -30,6 +30,9 @@ export const validateShippingForm = (data: ShippingFormData, isAuthenticated: bo
     data.lastName &&
     (!isAuthenticated ? data.email : true) &&
     data.phone &&
+    data.deliveryLat != null &&
+    data.deliveryLng != null &&
+    data.deliveryAddress &&
     data.address &&
     data.city &&
     data.country

@@ -29,7 +29,7 @@ function writeCache(items: CartItem[]) {
 }
 
 export function useCheckoutData() {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const cached = isAuthenticated ? readCache() : null;
 
   const [cartItems, setCartItems] = useState<CartItem[]>(cached ?? []);
@@ -83,6 +83,23 @@ export function useCheckoutData() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    const parts = (user.name || "").trim().split(/\s+/);
+    const firstName = parts[0] || "";
+    const lastName = parts.slice(1).join(" ") || parts[0] || "";
+
+    setShipping((prev) => {
+      const updates: Partial<typeof prev> = {};
+      if (!prev.firstName && firstName) updates.firstName = firstName;
+      if (!prev.lastName && lastName) updates.lastName = lastName;
+      if (!prev.email && user.email) updates.email = user.email;
+      if (!prev.phone && user.phone) updates.phone = user.phone;
+      return Object.keys(updates).length ? { ...prev, ...updates } : prev;
+    });
+  }, [isAuthenticated, user]);
 
   const activePaymentMethods = settings?.payment_methods || {
     mpesa: true,

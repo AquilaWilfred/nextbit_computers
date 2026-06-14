@@ -6,12 +6,19 @@ export interface ShippingFormData {
   lastName: string;
   email: string;
   phone: string;
+  additionalPhone1?: string;
+  additionalPhone2?: string;
+  deliveryNote?: string;
   address: string;
   county: string;
   city: string;
   postalCode: string;
   country: string;
   saveAddress: boolean;
+  // Delivery pin — set via in-app DeliveryMapModal (Bolt/Glovo style)
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
+  deliveryAddress?: string; // reverse-geocoded human label
 }
 
 export interface CartItem {
@@ -36,6 +43,9 @@ export interface SavedAddress {
   postalCode?: string | null;
   country: string;
   county?: string;
+  // Optional saved pin
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface PublicSettings {
@@ -62,6 +72,9 @@ export interface PlaceOrderRequest {
   items: Array<{ product_id: number; quantity: number }>;
   shippingFullName: string;
   shippingPhone: string;
+  shippingAdditionalPhone1?: string;
+  shippingAdditionalPhone2?: string;
+  deliveryNote?: string;
   shippingAddress: string;
   shippingCounty?: string;
   shippingCity: string;
@@ -72,6 +85,10 @@ export interface PlaceOrderRequest {
   isExpress: boolean;
   discountCode?: string;
   saveAddress: boolean;
+  // Optional precise delivery pin
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
+  deliveryAddress?: string;
 }
 
 export interface PlaceOrderResponse {

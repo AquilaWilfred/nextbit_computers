@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { Button } from "@/components/ui/button";
 import { clearGuestCart } from "@/lib/cart";
+import { getLoginUrl } from "@/lib/ux";
 
 import {
   StepIndicator,
@@ -101,8 +102,58 @@ export default function CheckoutPage() {
     return <CheckoutSkeleton />;
   }
 
+  // Require auth for checkout route
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center py-12">
+          <div className="w-full max-w-md mx-auto px-4">
+            <div className="bg-white rounded-2xl border border-border p-8 shadow-sm text-center">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--brand)]/10 text-[var(--brand)]">
+                <MapPin className="h-8 w-8" />
+              </div>
+              <h1 className="font-display text-2xl font-bold mb-2">Sign In to Checkout</h1>
+              <p className="text-sm text-muted-foreground mb-6">
+                Please sign in to continue with your order, save addresses, and access the delivery pin map.
+              </p>
+
+              <div className="space-y-3">
+                <Button
+                  className="w-full bg-[var(--brand)] text-white hover:opacity-90 h-11"
+                  onClick={() => (window.location.href = getLoginUrl("/checkout"))}
+                >
+                  Sign In to Checkout
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full h-11"
+                  onClick={() => (window.location.href = getLoginUrl("/checkout", "register"))}
+                >
+                  Create New Account
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full text-muted-foreground"
+                  onClick={() => window.location.assign("/cart")}
+                >
+                  ← Back to Cart
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-6">
+                Your cart items are saved and will still be available after sign-in.
+              </p>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
   // Empty cart
-  if (isAuthenticated && cartItems.length === 0 && !cartLoading) {
+  if (cartItems.length === 0) {
     return <EmptyCart />;
   }
 

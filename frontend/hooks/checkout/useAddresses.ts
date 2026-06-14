@@ -17,6 +17,9 @@ export function useAddresses() {
       city: addr.city,
       postalCode: addr.postalCode ?? "",
       country: addr.country,
+      // Restore saved delivery pin if it exists
+      deliveryLat: addr.lat ?? null,
+      deliveryLng: addr.lng ?? null,
     }));
   };
 
