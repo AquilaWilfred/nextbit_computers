@@ -500,7 +500,7 @@ async def oauth_upsert(
         user.lastSignedIn = datetime.utcnow()
         user.updatedAt = datetime.utcnow()
         if not user.openId:
-            user.openId = body.google_id
+            user.openId = str(uuid.uuid4())
         if not user.emailVerified:
             user.emailVerified = True  # Google emails are pre-verified
         db.commit()
@@ -511,7 +511,7 @@ async def oauth_upsert(
             name=body.name,
             password=None,
             role="user",
-            openId=body.google_id,
+            openId=str(uuid.uuid4()),
             loginMethod="google",
             emailVerified=True,
             createdAt=datetime.utcnow(),
